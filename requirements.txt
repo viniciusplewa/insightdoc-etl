@@ -1,0 +1,7 @@
+pandas
+sqlite3
+chromadb
+streamlit
+plotly
+sentence-transformers
+requests
