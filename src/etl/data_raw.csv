@@ -1,0 +1,201 @@
+order_id,department,service_type,priority,created_at,duration_minutes,estimated_cost
+OS-1001,Pediatrics,Preventive Maintenance,High,2026-04-17 07:00:00,203,562.71
+OS-1002,Surgical Center,Technical Inspection,Low,2026-04-10 07:00:00,166,114.87
+OS-1003,emergency room,Technical Inspection,URGENT,2026-01-21 00:00:00,36,76.52
+OS-1004,Emergency Room,Technical Inspection,URGENT,2026-01-15 14:00:00,65,1180.72
+OS-1005,outpatient clinic,Equipment Repair,High,2026-01-21 08:00:00,181,1133.53
+OS-1006,Emergency Room,Preventive Maintenance,Medium,2026-02-22 01:00:00,106,190.34
+OS-1007,Surgical Center,Advanced Sanitation,Low,2026-06-13 17:00:00,16,289.13
+OS-1008,Outpatient Clinic,Equipment Repair,Medium,2026-02-13 01:00:00,216,737.58
+OS-1009,Pediatrics,Preventive Maintenance,Medium,2026-02-09 20:00:00,222,670.65
+OS-1010,ICU Adult,Technical Inspection,URGENT,2026-05-04 12:00:00,55,
+OS-1011,ICU Adult,Technical Inspection,Low,2026-05-16 10:00:00,95,958.7
+OS-1012,Emergency Room,Equipment Repair,Medium,2026-02-10 06:00:00,215,430.53
+OS-1013,Outpatient Clinic,Equipment Repair,URGENT,2026-04-14 21:00:00,49,187.53
+OS-1014,ICU Adult,Preventive Maintenance,Medium,2026-05-22 06:00:00,297,
+OS-1015,Outpatient Clinic,Equipment Repair,High,2026-04-06 06:00:00,255,634.86
+OS-1016,Outpatient Clinic,Equipment Repair,High,2026-01-29 03:00:00,27,383.21
+OS-1017,Emergency Room,Advanced Sanitation,Low,2026-03-03 20:00:00,148,301.21
+OS-1018,Surgical Center,Technical Inspection,Medium,2026-04-02 06:00:00,204,312.13
+OS-1019,Pediatrics,Preventive Maintenance,Low,2026-01-03 06:00:00,212,530.02
+OS-1020,Surgical Center,Advanced Sanitation,URGENT,2026-06-01 14:00:00,174,858.47
+OS-1021,ICU Adult,Advanced Sanitation,URGENT,2026-01-12 06:00:00,127,1197.4
+OS-1022,Emergency Room,Advanced Sanitation,URGENT,2026-02-23 22:00:00,238,325.5
+OS-1023,Pediatrics,Advanced Sanitation,URGENT,2026-06-09 22:00:00,217,328.48
+OS-1024,Outpatient Clinic,Technical Inspection,Medium,2026-05-19 15:00:00,158,418.9
+OS-1025,Outpatient Clinic,Equipment Repair,URGENT,2026-06-13 18:00:00,161,160.6
+OS-1026,Emergency Room,Technical Inspection,Low,2026-01-11 17:00:00,165,850.15
+OS-1027,Emergency Room,Technical Inspection,Low,2026-03-01 16:00:00,16,1160.23
+OS-1028,Surgical Center,Equipment Repair,Low,2026-04-09 18:00:00,222,1070.15
+OS-1029,Pediatrics,Equipment Repair,Low,2026-06-13 05:00:00,118,60.58
+OS-1030,Surgical Center,Preventive Maintenance,Low,2026-05-26 13:00:00,208,799.76
+OS-1031,ICU Adult,Technical Inspection,Low,2026-05-22 20:00:00,149,404.27
+OS-1032,Surgical Center,Equipment Repair,Medium,2026-04-29 21:00:00,252,1175.73
+OS-1033,Surgical Center,Equipment Repair,Medium,2026-01-21 00:00:00,298,1043.79
+OS-1034,Surgical Center,Technical Inspection,High,2026-02-18 16:00:00,186,1147.02
+OS-1035,Surgical Center,Technical Inspection,Low,2026-02-06 16:00:00,195,1177.38
+OS-1036,Outpatient Clinic,Preventive Maintenance,URGENT,2026-06-10 02:00:00,142,503.9
+OS-1037,Surgical Center,Technical Inspection,Medium,2026-01-24 17:00:00,165,646.08
+OS-1038,ICU Adult,Technical Inspection,Low,2026-05-17 10:00:00,260,387.63
+OS-1039,Surgical Center,Advanced Sanitation,Low,2026-06-01 12:00:00,50,797.46
+OS-1040,Pediatrics,Equipment Repair,High,2026-05-23 01:00:00,229,427.38
+OS-1041,outpatient clinic,Advanced Sanitation,Medium,2026-02-27 21:00:00,194,398.76
+OS-1042,Outpatient Clinic,Preventive Maintenance,URGENT,2026-02-22 11:00:00,122,148.15
+OS-1043,Pediatrics,Advanced Sanitation,High,2026-04-09 22:00:00,158,643.75
+OS-1044,ICU Adult,Technical Inspection,High,2026-01-19 22:00:00,243,143.0
+OS-1045,Pediatrics,Preventive Maintenance,Low,2026-02-27 00:00:00,253,681.61
+OS-1046,Outpatient Clinic,Preventive Maintenance,Low,2026-01-16 06:00:00,206,753.48
+OS-1047,pediatrics,Advanced Sanitation,URGENT,2026-06-28 04:00:00,100,183.48
+OS-1048,ICU Adult,Advanced Sanitation,Medium,2026-05-24 15:00:00,53,584.37
+OS-1049,Emergency Room,Advanced Sanitation,Medium,2026-03-10 03:00:00,194,769.74
+OS-1050,ICU Adult,Technical Inspection,Low,2026-01-04 15:00:00,294,1135.89
+OS-1051,Surgical Center,Technical Inspection,URGENT,2026-05-20 17:00:00,177,576.99
+OS-1052,Outpatient Clinic,Technical Inspection,High,2026-03-06 00:00:00,182,275.16
+OS-1053,Emergency Room,Preventive Maintenance,High,2026-02-04 22:00:00,104,
+OS-1054,Emergency Room,Equipment Repair,Low,2026-05-15 03:00:00,128,1059.09
+OS-1055,Outpatient Clinic,Preventive Maintenance,Low,2026-06-13 09:00:00,206,891.39
+OS-1056,ICU Adult,Equipment Repair,URGENT,2026-06-01 22:00:00,204,324.39
+OS-1057,ICU Adult,Equipment Repair,Low,2026-01-30 16:00:00,76,498.06
+OS-1058,Surgical Center,Preventive Maintenance,URGENT,2026-05-20 08:00:00,90,1150.32
+OS-1059,Pediatrics,Equipment Repair,Medium,2026-04-21 15:00:00,83,427.96
+OS-1060,Pediatrics,Preventive Maintenance,High,2026-05-24 06:00:00,123,1170.39
+OS-1061,Emergency Room,Preventive Maintenance,High,2026-03-16 17:00:00,253,925.74
+OS-1062,Outpatient Clinic,Advanced Sanitation,High,2026-06-23 12:00:00,182,995.14
+OS-1063,Outpatient Clinic,Preventive Maintenance,Low,2026-06-15 18:00:00,150,476.24
+OS-1064,ICU Adult,Preventive Maintenance,URGENT,2026-02-05 05:00:00,266,943.72
+OS-1065,Surgical Center,Advanced Sanitation,Medium,2026-01-19 06:00:00,140,63.06
+OS-1066,Emergency Room,Technical Inspection,URGENT,2026-03-02 08:00:00,15,323.13
+OS-1067,Pediatrics,Preventive Maintenance,Low,2026-02-25 00:00:00,131,63.98
+OS-1068,Outpatient Clinic,Equipment Repair,Low,2026-03-21 21:00:00,227,134.87
+OS-1069,Pediatrics,Preventive Maintenance,Medium,2026-02-16 08:00:00,28,1195.21
+OS-1070,Surgical Center,Technical Inspection,High,2026-01-12 09:00:00,238,503.7
+OS-1071,Outpatient Clinic,Technical Inspection,Medium,2026-04-02 03:00:00,104,313.8
+OS-1072,Outpatient Clinic,Preventive Maintenance,URGENT,2026-06-04 21:00:00,159,522.89
+OS-1073,Outpatient Clinic,Preventive Maintenance,Medium,2026-02-04 05:00:00,96,718.34
+OS-1074,Emergency Room,Technical Inspection,Medium,2026-04-19 04:00:00,133,944.24
+OS-1075,ICU Adult,Equipment Repair,Low,2026-01-26 21:00:00,297,123.04
+OS-1076,ICU Adult,Preventive Maintenance,URGENT,2026-02-24 05:00:00,211,1196.13
+OS-1077,Outpatient Clinic,Preventive Maintenance,Low,2026-03-24 16:00:00,99,198.53
+OS-1078,Outpatient Clinic,Technical Inspection,Medium,2026-04-23 07:00:00,48,180.59
+OS-1079,Emergency Room,Advanced Sanitation,Medium,2026-01-03 17:00:00,282,1163.17
+OS-1080,Surgical Center,Preventive Maintenance,Low,2026-04-22 14:00:00,221,785.27
+OS-1081,Pediatrics,Advanced Sanitation,Medium,2026-02-19 01:00:00,263,951.2
+OS-1082,Emergency Room,Equipment Repair,Low,2026-05-13 03:00:00,152,615.93
+OS-1083,Outpatient Clinic,Advanced Sanitation,Medium,2026-02-22 01:00:00,219,716.6
+OS-1084,ICU Adult,Equipment Repair,High,2026-03-21 10:00:00,22,850.98
+OS-1085,Surgical Center,Equipment Repair,Low,2026-06-09 17:00:00,75,97.0
+OS-1086,Pediatrics,Advanced Sanitation,Low,2026-01-22 20:00:00,15,459.39
+OS-1087,ICU Adult,Advanced Sanitation,Medium,2026-02-14 08:00:00,296,772.09
+OS-1088,Surgical Center,Equipment Repair,URGENT,2026-03-02 16:00:00,40,147.19
+OS-1089,Pediatrics,Equipment Repair,High,2026-05-07 21:00:00,28,474.25
+OS-1090,Outpatient Clinic,Advanced Sanitation,Medium,2026-02-25 18:00:00,21,1021.11
+OS-1091,Pediatrics,Preventive Maintenance,Medium,2026-02-07 02:00:00,29,898.02
+OS-1092,ICU Adult,Preventive Maintenance,High,2026-03-27 11:00:00,39,732.63
+OS-1093,Surgical Center,Preventive Maintenance,Low,2026-05-26 14:00:00,242,724.87
+OS-1094,ICU Adult,Technical Inspection,High,2026-02-11 08:00:00,115,792.8
+OS-1095,Surgical Center,Preventive Maintenance,Medium,2026-05-01 00:00:00,164,470.16
+OS-1096,Surgical Center,Advanced Sanitation,Medium,2026-04-04 22:00:00,151,653.19
+OS-1097,Pediatrics,Technical Inspection,High,2026-01-06 01:00:00,234,56.1
+OS-1098,Surgical Center,Advanced Sanitation,Low,2026-03-20 10:00:00,40,934.92
+OS-1099,Pediatrics,Equipment Repair,URGENT,2026-01-20 16:00:00,154,752.21
+OS-1100,Outpatient Clinic,Advanced Sanitation,High,2026-04-10 12:00:00,273,437.09
+OS-1101,Emergency Room,Technical Inspection,Medium,2026-01-13 07:00:00,144,
+OS-1102,ICU Adult,Equipment Repair,High,2026-06-01 05:00:00,108,1028.34
+OS-1103,Emergency Room,Advanced Sanitation,Low,2026-04-30 10:00:00,151,486.11
+OS-1104,Pediatrics,Technical Inspection,Low,2026-03-13 10:00:00,243,238.2
+OS-1105,Outpatient Clinic,Equipment Repair,High,2026-03-19 03:00:00,103,501.31
+OS-1106,Surgical Center,Preventive Maintenance,Medium,2026-04-07 22:00:00,77,317.04
+OS-1107,Emergency Room,Advanced Sanitation,Low,2026-04-14 07:00:00,53,1130.81
+OS-1108,Emergency Room,Technical Inspection,URGENT,2026-01-15 14:00:00,171,902.68
+OS-1109,Outpatient Clinic,Advanced Sanitation,Low,2026-04-07 04:00:00,268,871.17
+OS-1110,Emergency Room,Preventive Maintenance,Medium,2026-02-07 12:00:00,173,575.55
+OS-1111,Outpatient Clinic,Technical Inspection,Low,2026-06-06 14:00:00,187,787.32
+OS-1112,Pediatrics,Advanced Sanitation,High,2026-01-27 04:00:00,162,1094.72
+OS-1113,Emergency Room,Advanced Sanitation,High,2026-05-20 12:00:00,118,
+OS-1114,Pediatrics,Equipment Repair,URGENT,2026-04-10 15:00:00,147,863.32
+OS-1115,Pediatrics,Equipment Repair,Medium,2026-05-17 21:00:00,65,1124.52
+OS-1116,ICU Adult,Advanced Sanitation,Low,2026-05-29 13:00:00,196,431.97
+OS-1117,Surgical Center,Technical Inspection,High,2026-05-29 14:00:00,151,955.96
+OS-1118,Surgical Center,Equipment Repair,URGENT,2026-01-25 10:00:00,224,1106.22
+OS-1119,Surgical Center,Technical Inspection,High,2026-06-28 21:00:00,166,240.34
+OS-1120,ICU Adult,Preventive Maintenance,Low,2026-03-04 10:00:00,164,294.58
+OS-1121,ICU Adult,Technical Inspection,Low,2026-06-26 19:00:00,132,665.33
+OS-1122,ICU Adult,Technical Inspection,Low,2026-06-28 18:00:00,46,768.72
+OS-1123,Surgical Center,Advanced Sanitation,Low,2026-03-19 18:00:00,189,664.62
+OS-1124,Surgical Center,Equipment Repair,URGENT,2026-05-09 07:00:00,69,479.31
+OS-1125,Emergency Room,Technical Inspection,Low,2026-03-28 22:00:00,192,519.18
+OS-1126,Surgical Center,Technical Inspection,High,2026-03-13 21:00:00,263,255.33
+OS-1127,Emergency Room,Equipment Repair,URGENT,2026-03-29 13:00:00,134,1157.05
+OS-1128,Outpatient Clinic,Advanced Sanitation,High,2026-02-24 15:00:00,21,896.29
+OS-1129,Outpatient Clinic,Equipment Repair,URGENT,2026-01-29 17:00:00,16,768.48
+OS-1130,Emergency Room,Equipment Repair,High,2026-04-29 11:00:00,34,520.82
+OS-1131,Emergency Room,Preventive Maintenance,URGENT,2026-04-09 19:00:00,294,700.64
+OS-1132,ICU Adult,Advanced Sanitation,High,2026-01-14 08:00:00,54,512.93
+OS-1133,Surgical Center,Advanced Sanitation,URGENT,2026-06-03 12:00:00,112,71.15
+OS-1134,Outpatient Clinic,Advanced Sanitation,URGENT,2026-02-10 05:00:00,48,799.13
+OS-1135,Outpatient Clinic,Advanced Sanitation,Medium,2026-01-27 05:00:00,233,740.59
+OS-1136,Emergency Room,Preventive Maintenance,Low,2026-06-03 20:00:00,204,104.01
+OS-1137,Surgical Center,Preventive Maintenance,High,2026-02-05 18:00:00,296,1012.64
+OS-1138,Pediatrics,Preventive Maintenance,High,2026-02-08 07:00:00,241,506.15
+OS-1139,Outpatient Clinic,Technical Inspection,Low,2026-02-05 14:00:00,162,1017.76
+OS-1140,Surgical Center,Preventive Maintenance,High,2026-06-03 01:00:00,87,887.42
+OS-1141,Surgical Center,Technical Inspection,Medium,2026-01-25 06:00:00,145,52.69
+OS-1142,Emergency Room,Technical Inspection,High,2026-04-11 11:00:00,31,562.91
+OS-1143,Surgical Center,Technical Inspection,High,2026-05-29 16:00:00,229,782.82
+OS-1144,emergency room,Preventive Maintenance,URGENT,2026-05-23 08:00:00,40,861.41
+OS-1145,Emergency Room,Preventive Maintenance,Medium,2026-05-15 13:00:00,131,271.49
+OS-1146,surgical center,Equipment Repair,Low,2026-03-23 19:00:00,117,735.71
+OS-1147,Pediatrics,Preventive Maintenance,Medium,2026-05-11 04:00:00,185,883.48
+OS-1148,ICU Adult,Technical Inspection,Low,2026-06-02 12:00:00,224,540.84
+OS-1149,Emergency Room,Equipment Repair,High,2026-06-19 01:00:00,265,658.28
+OS-1150,Surgical Center,Equipment Repair,High,2026-02-15 19:00:00,43,512.22
+OS-1151,ICU Adult,Technical Inspection,URGENT,2026-05-01 09:00:00,79,177.05
+OS-1152,Emergency Room,Technical Inspection,Medium,2026-02-06 15:00:00,207,101.87
+OS-1153,ICU Adult,Technical Inspection,URGENT,2026-05-20 04:00:00,75,726.84
+OS-1154,Surgical Center,Advanced Sanitation,Low,2026-06-02 06:00:00,66,511.82
+OS-1155,Outpatient Clinic,Equipment Repair,Low,2026-04-20 09:00:00,121,303.56
+OS-1156,Surgical Center,Technical Inspection,Medium,2026-01-05 04:00:00,68,1066.35
+OS-1157,Emergency Room,Preventive Maintenance,Low,2026-05-03 09:00:00,192,1195.79
+OS-1158,Surgical Center,Advanced Sanitation,Low,2026-04-30 14:00:00,103,717.1
+OS-1159,ICU Adult,Technical Inspection,High,2026-05-03 08:00:00,209,1041.45
+OS-1160,ICU Adult,Preventive Maintenance,High,2026-05-04 14:00:00,52,881.93
+OS-1161,Outpatient Clinic,Technical Inspection,URGENT,2026-01-28 04:00:00,95,1065.34
+OS-1162,Surgical Center,Advanced Sanitation,High,2026-02-25 07:00:00,54,357.08
+OS-1163,Surgical Center,Technical Inspection,URGENT,2026-04-02 00:00:00,73,864.62
+OS-1164,ICU Adult,Preventive Maintenance,Medium,2026-04-10 05:00:00,202,1063.0
+OS-1165,Surgical Center,Equipment Repair,High,2026-06-19 09:00:00,174,905.03
+OS-1166,Pediatrics,Advanced Sanitation,Medium,2026-03-18 11:00:00,238,425.4
+OS-1167,Emergency Room,Technical Inspection,URGENT,2026-03-29 12:00:00,177,
+OS-1168,ICU Adult,Technical Inspection,Medium,2026-03-04 14:00:00,236,957.13
+OS-1169,Pediatrics,Advanced Sanitation,URGENT,2026-01-17 11:00:00,207,135.9
+OS-1170,Outpatient Clinic,Technical Inspection,URGENT,2026-06-29 11:00:00,21,994.74
+OS-1171,Surgical Center,Equipment Repair,Medium,2026-01-26 01:00:00,240,540.11
+OS-1172,Outpatient Clinic,Preventive Maintenance,High,2026-04-26 01:00:00,189,802.69
+OS-1173,ICU Adult,Advanced Sanitation,URGENT,2026-04-02 20:00:00,98,365.35
+OS-1174,ICU Adult,Advanced Sanitation,URGENT,2026-06-15 14:00:00,176,85.8
+OS-1175,Pediatrics,Advanced Sanitation,High,2026-01-27 07:00:00,74,1048.92
+OS-1176,Surgical Center,Advanced Sanitation,Medium,2026-05-11 11:00:00,195,1162.64
+OS-1177,ICU Adult,Advanced Sanitation,Medium,2026-01-17 11:00:00,242,309.37
+OS-1178,Outpatient Clinic,Preventive Maintenance,Medium,2026-03-29 07:00:00,78,63.36
+OS-1179,Emergency Room,Advanced Sanitation,High,2026-04-05 05:00:00,46,920.62
+OS-1180,ICU Adult,Technical Inspection,High,2026-06-28 08:00:00,90,213.87
+OS-1181,Pediatrics,Technical Inspection,Low,2026-06-17 17:00:00,16,1064.91
+OS-1182,Outpatient Clinic,Technical Inspection,Medium,2026-05-30 06:00:00,208,280.99
+OS-1183,emergency room,Advanced Sanitation,High,2026-06-21 16:00:00,137,1126.64
+OS-1184,ICU Adult,Advanced Sanitation,URGENT,2026-01-08 07:00:00,192,950.94
+OS-1185,Surgical Center,Technical Inspection,URGENT,2026-05-12 05:00:00,36,790.11
+OS-1186,Emergency Room,Advanced Sanitation,High,2026-01-12 22:00:00,26,1052.55
+OS-1187,pediatrics,Preventive Maintenance,URGENT,2026-04-29 20:00:00,197,
+OS-1188,Surgical Center,Advanced Sanitation,Low,2026-04-06 08:00:00,73,279.47
+OS-1189,Outpatient Clinic,Advanced Sanitation,High,2026-04-07 06:00:00,227,904.11
+OS-1190,Pediatrics,Technical Inspection,URGENT,2026-05-06 19:00:00,166,641.1
+OS-1191,Emergency Room,Preventive Maintenance,Medium,2026-03-07 14:00:00,276,1190.95
+OS-1192,Outpatient Clinic,Technical Inspection,High,2026-01-18 07:00:00,35,201.3
+OS-1193,Emergency Room,Technical Inspection,Medium,2026-03-19 01:00:00,55,1051.36
+OS-1194,ICU Adult,Technical Inspection,Medium,2026-03-11 16:00:00,42,805.25
+OS-1195,Pediatrics,Technical Inspection,URGENT,2026-02-14 22:00:00,24,245.22
+OS-1196,Emergency Room,Technical Inspection,Medium,2026-04-15 00:00:00,147,759.72
+OS-1197,Pediatrics,Technical Inspection,Low,2026-04-17 04:00:00,189,595.83
+OS-1198,Pediatrics,Technical Inspection,URGENT,2026-04-21 14:00:00,122,89.32
+OS-1199,ICU Adult,Equipment Repair,Low,2026-01-20 00:00:00,133,257.01
+OS-1200,ICU Adult,Preventive Maintenance,High,2026-01-12 09:00:00,290,
