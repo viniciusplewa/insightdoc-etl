@@ -3,11 +3,9 @@ import pandas as pd
 import sqlite3
 import plotly.express as px
 import os
-import sys
 
 # Add src directories to module path
-sys.path.append(os.path.join(os.path.dirname(__file__), "rag"))
-from llm_chain import generate_rag_response
+from rag.llm_chain import generate_rag_response
 
 # Page configuration
 st.set_page_config(
