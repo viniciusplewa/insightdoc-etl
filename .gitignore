@@ -1,13 +1,8 @@
-# Python cache
 __pycache__/
 *.pyc
-
-# Local Databases & Vector Stores
 chroma_db/
 *.db
 *.sqlite3
-
-# Operational Data
 *.xls
 *.xlsx
-data_raw.csv
+*.csv
