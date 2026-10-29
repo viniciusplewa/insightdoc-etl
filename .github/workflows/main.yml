@@ -24,7 +24,7 @@ jobs:
     - name: Criar script run_app.py
       run: |
         echo "import os" > run_app.py
-        echo "import sys" >> run_app.py
+        echo "import sys" > run_app.py
         echo "import streamlit.web.cli as stcli" >> run_app.py
         echo "if __name__ == '__main__':" >> run_app.py
         echo "    script_path = os.path.join(os.path.dirname(__file__), 'app.py')" >> run_app.py
@@ -40,7 +40,7 @@ jobs:
         Compress-Archive -Path dist\run_app -DestinationPath InsightDoc-Limpezas.zip
 
     - name: Salvar Artefato (Baixar .zip)
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: App-Executavel-Windows
         path: InsightDoc-Limpezas.zip
