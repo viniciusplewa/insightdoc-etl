@@ -41,7 +41,7 @@ jobs:
 
     - name: Compilar com PyInstaller
       run: |
-        pyinstaller --noconfirm --onefile --windowed --add-data "app.py;." --collect-metadata streamlit --collect-metadata altair --collect-metadata click run_app.py
+        pyinstaller --noconfirm --onefile --windowed --add-data "app.py;." --copy-metadata streamlit --copy-metadata altair --copy-metadata click run_app.py
 
     - name: Compactar pasta do Executavel
       run: |
