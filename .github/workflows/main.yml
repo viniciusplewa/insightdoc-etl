@@ -1,0 +1,46 @@
+name: Construir Executavel Windows
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas openpyxl plotly streamlit pyinstaller
+
+    - name: Criar script run_app.py
+      run: |
+        echo "import os" > run_app.py
+        echo "import sys" >> run_app.py
+        echo "import streamlit.web.cli as stcli" >> run_app.py
+        echo "if __name__ == '__main__':" >> run_app.py
+        echo "    script_path = os.path.join(os.path.dirname(__file__), 'app.py')" >> run_app.py
+        echo "    sys.argv = ['streamlit', 'run', script_path, '--global.developmentMode=false']" >> run_app.py
+        echo "    sys.exit(stcli.main())" >> run_app.py
+
+    - name: Compilar com PyInstaller
+      run: |
+        pyinstaller --noconfirm --onedir --windowed --add-data "app.py;." run_app.py
+
+    - name: Compactar pasta do Executavel
+      run: |
+        Compress-Archive -Path dist\run_app -DestinationPath InsightDoc-Limpezas.zip
+
+    - name: Salvar Artefato (Baixar .zip)
+      uses: actions/upload-artifact@v3
+      with:
+        name: App-Executavel-Windows
+        path: InsightDoc-Limpezas.zip
