@@ -8,7 +8,6 @@ jobs:
   build:
     runs-on: windows-latest
     
-    # Força o ambiente a utilizar Node 24 conforme o novo padrão do GitHub Actions
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -25,19 +24,24 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas openpyxl plotly streamlit pyinstaller
 
-    - name: Criar script run_app.py
+    - name: Criar run_app.py com seguranca (PowerShell)
+      shell: pwsh
       run: |
-        echo "import os" > run_app.py
-        echo "import sys" > run_app.py
-        echo "import streamlit.web.cli as stcli" > run_app.py
-        echo "if __name__ == '__main__':" > run_app.py
-        echo "    script_path = os.path.join(os.path.dirname(__file__), 'app.py')" > run_app.py
-        echo "    sys.argv = ['streamlit', 'run', script_path, '--global.developmentMode=false']" > run_app.py
-        echo "    sys.exit(stcli.main())" > run_app.py
+        $content = @"
+        import os
+        import sys
+        import streamlit.web.cli as stcli
+
+        if __name__ == '__main__':
+            script_path = os.path.join(os.path.dirname(__file__), "app.py")
+            sys.argv = ["streamlit", "run", script_path, "--global.developmentMode=false"]
+            sys.exit(stcli.main())
+        "@
+        Set-Content -Path run_app.py -Value $content -Encoding UTF8
 
     - name: Compilar com PyInstaller
       run: |
-        pyinstaller --noconfirm --onedir --windowed --add-data "app.py;." run_app.py
+        pyinstaller --noconfirm --onedir --windowed run_app.py
 
     - name: Compactar pasta do Executavel
       run: |
