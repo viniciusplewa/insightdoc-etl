@@ -24,43 +24,45 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas openpyxl plotly streamlit pyinstaller
 
-    - name: Criar script de inicializacao (run_app.py)
+    - name: Criar inicializador direto (launcher.py)
       shell: pwsh
       run: |
         $content = @"
         import os
         import sys
-        import streamlit.web.cli as stcli
+        from streamlit.web.bootstrap import run
 
         if __name__ == '__main__':
-            # Descobre onde o executável ou script está localizado
+            # Descobre se está rodando como executável compilado ou script normal
             if getattr(sys, 'frozen', False):
+                # Pega o diretório real onde o executável está na máquina do usuário
                 base_path = os.path.dirname(sys.executable)
             else:
                 base_path = os.path.dirname(__file__)
-            
-            # Força o diretório de trabalho atual para o local dos arquivos
+
+            # Caminho absoluto garantido para o app.py na mesma pasta
+            target_script = os.path.join(base_path, "app.py")
+
+            # Inicializa o servidor do Streamlit programaticamente ignorando conflitos de CLI
             os.chdir(base_path)
+            sys.argv = ["streamlit", "run", target_script, "--global.developmentMode=false"]
             
-            script_path = os.path.join(base_path, "app.py")
-            
-            sys.argv = [
-                "streamlit",
-                "run",
-                script_path,
-                "--global.developmentMode=false",
-            ]
-            sys.exit(stcli.main())
+            run(target_script, False, [])
         "@
-        Set-Content -Path run_app.py -Value $content -Encoding UTF8
+        Set-Content -Path launcher.py -Value $content -Encoding UTF8
 
-    - name: Compilar com PyInstaller (Modo Pasta / Onedir)
+    - name: Compilar com PyInstaller (Modo Pasta Confiável)
       run: |
-        pyinstaller --noconfirm --onedir --copy-metadata streamlit --copy-metadata altair --copy-metadata click --add-data "app.py;." run_app.py
+        pyinstaller --noconfirm --onedir --copy-metadata streamlit --copy-metadata altair --copy-metadata click launcher.py
 
-    - name: Compactar Pasta do Executavel
+    - name: Inserir o app.py na pasta de distribuicao
+      shell: pwsh
       run: |
-        Compress-Archive -Path dist\run_app -DestinationPath InsightDoc-Limpezas.zip
+        Copy-Item "app.py" -Destination "dist\launcher\" -Force
+
+    - name: Compactar para ZIP
+      run: |
+        Compress-Archive -Path dist\launcher -DestinationPath InsightDoc-Limpezas.zip
 
     - name: Salvar Artefato (Baixar .zip)
       uses: actions/upload-artifact@v4
