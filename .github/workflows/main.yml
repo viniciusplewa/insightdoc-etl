@@ -33,7 +33,15 @@ jobs:
         import streamlit.web.cli as stcli
 
         if __name__ == '__main__':
-            base_path = os.path.dirname(__file__)
+            # Descobre onde o executável ou script está localizado
+            if getattr(sys, 'frozen', False):
+                base_path = os.path.dirname(sys.executable)
+            else:
+                base_path = os.path.dirname(__file__)
+            
+            # Força o diretório de trabalho atual para o local dos arquivos
+            os.chdir(base_path)
+            
             script_path = os.path.join(base_path, "app.py")
             
             sys.argv = [
