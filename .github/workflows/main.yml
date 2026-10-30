@@ -33,7 +33,7 @@ jobs:
         import streamlit.web.cli as stcli
 
         if __name__ == '__main__':
-            # Garante compatibilidade tanto rodando local quanto dentro do executável compilado
+            # Define o caminho correto para o app.py dependendo se é executável ou script local
             if getattr(sys, 'frozen', False):
                 base_path = sys._MEIPASS
             else:
@@ -41,11 +41,13 @@ jobs:
             
             script_path = os.path.join(base_path, "app.py")
             
+            # Força o argumento do Streamlit apontando diretamente para o caminho absoluto
             sys.argv = [
                 "streamlit",
                 "run",
                 script_path,
                 "--global.developmentMode=false",
+                "--server.headless=true"
             ]
             sys.exit(stcli.main())
         "@
