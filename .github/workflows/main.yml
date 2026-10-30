@@ -24,7 +24,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas openpyxl plotly streamlit pyinstaller
 
-    - name: Criar run_app.py com seguranca (PowerShell)
+    - name: Criar run_app.py com caminho seguro para PyInstaller (PowerShell)
       shell: pwsh
       run: |
         $content = @"
@@ -33,8 +33,19 @@ jobs:
         import streamlit.web.cli as stcli
 
         if __name__ == '__main__':
-            script_path = os.path.join(os.path.dirname(__file__), "app.py")
-            sys.argv = ["streamlit", "run", script_path, "--global.developmentMode=false"]
+            if getattr(sys, 'frozen', False):
+                base_path = sys._MEIPASS
+            else:
+                base_path = os.path.dirname(__file__)
+            
+            script_path = os.path.join(base_path, "app.py")
+            
+            sys.argv = [
+                "streamlit",
+                "run",
+                script_path,
+                "--global.developmentMode=false",
+            ]
             sys.exit(stcli.main())
         "@
         Set-Content -Path run_app.py -Value $content -Encoding UTF8
