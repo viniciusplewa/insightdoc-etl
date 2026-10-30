@@ -33,33 +33,26 @@ jobs:
         import streamlit.web.cli as stcli
 
         if __name__ == '__main__':
-            # Define o caminho correto para o app.py dependendo se é executável ou script local
-            if getattr(sys, 'frozen', False):
-                base_path = sys._MEIPASS
-            else:
-                base_path = os.path.dirname(__file__)
-            
+            base_path = os.path.dirname(__file__)
             script_path = os.path.join(base_path, "app.py")
             
-            # Força o argumento do Streamlit apontando diretamente para o caminho absoluto
             sys.argv = [
                 "streamlit",
                 "run",
                 script_path,
                 "--global.developmentMode=false",
-                "--server.headless=true"
             ]
             sys.exit(stcli.main())
         "@
         Set-Content -Path run_app.py -Value $content -Encoding UTF8
 
-    - name: Compilar com PyInstaller
+    - name: Compilar com PyInstaller (Modo Pasta / Onedir)
       run: |
-        pyinstaller --noconfirm --onefile --copy-metadata streamlit --copy-metadata altair --copy-metadata click --add-data "app.py;." run_app.py
+        pyinstaller --noconfirm --onedir --copy-metadata streamlit --copy-metadata altair --copy-metadata click --add-data "app.py;." run_app.py
 
-    - name: Compactar Executavel
+    - name: Compactar Pasta do Executavel
       run: |
-        Compress-Archive -Path dist\run_app.exe -DestinationPath InsightDoc-Limpezas.zip
+        Compress-Archive -Path dist\run_app -DestinationPath InsightDoc-Limpezas.zip
 
     - name: Salvar Artefato (Baixar .zip)
       uses: actions/upload-artifact@v4
