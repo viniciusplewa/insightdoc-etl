@@ -24,39 +24,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install pandas openpyxl plotly streamlit pyinstaller
 
-    - name: Criar run_app.py com caminho seguro para PyInstaller (PowerShell)
+    - name: Compilar aplicativo com PyInstaller (Versão Blindada)
       shell: pwsh
       run: |
-        $content = @"
-        import os
-        import sys
-        import streamlit.web.cli as stcli
+        pyinstaller --noconfirm --onefile --copy-metadata streamlit --copy-metadata altair --copy-metadata click --add-data "app.py;." --hidden-import="streamlit.web.cli" -c -e "import sys; from streamlit.web.cli import main; sys.argv=['streamlit', 'run', 'app.py', '--global.developmentMode=false']; sys.exit(main())"
 
-        if __name__ == '__main__':
-            if getattr(sys, 'frozen', False):
-                base_path = sys._MEIPASS
-            else:
-                base_path = os.path.dirname(__file__)
-            
-            script_path = os.path.join(base_path, "app.py")
-            
-            sys.argv = [
-                "streamlit",
-                "run",
-                script_path,
-                "--global.developmentMode=false",
-            ]
-            sys.exit(stcli.main())
-        "@
-        Set-Content -Path run_app.py -Value $content -Encoding UTF8
-
-    - name: Compilar com PyInstaller
+    - name: Compactar Executavel
       run: |
-        pyinstaller --noconfirm --onefile --copy-metadata streamlit --copy-metadata altair --copy-metadata click --add-data "app.py;." run_app.py
-
-    - name: Compactar pasta do Executavel
-      run: |
-        Compress-Archive -Path dist\run_app.exe -DestinationPath InsightDoc-Limpezas.zip
+        Compress-Archive -Path dist\* -DestinationPath InsightDoc-Limpezas.zip
 
     - name: Salvar Artefato (Baixar .zip)
       uses: actions/upload-artifact@v4
