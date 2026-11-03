@@ -72,7 +72,7 @@ def identificar_setor(leito):
     
     return "Outros / Demais Setores"
 
-# Função para processar o relatório (.xlsx) com as colunas corretas
+# Função para processar o relatório (.xlsx) com mapeamento exato de colunas
 def processar_relatorio_limpeza(uploaded_file):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
