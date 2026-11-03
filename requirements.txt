@@ -1,6 +1,6 @@
-pandas
-chromadb
 streamlit
+pandas
 plotly
-sentence-transformers
-requests
+openpyxl
+xlrd
+python-calamine
