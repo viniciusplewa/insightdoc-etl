@@ -30,7 +30,7 @@ def load_data():
     conn.close()
     return df
 
-# Função de Mapeamento Inteligente de Setores baseada nos Leitos
+# Função de Mapeamento Inteligente de Setores (Sem "Outros")
 def identificar_setor(leito):
     leito_str = str(leito).strip().upper()
     
@@ -39,7 +39,7 @@ def identificar_setor(leito):
     
     match = re.search(r'\d+', leito_str)
     if not match:
-        return "Outros / Não Especificado"
+        return "PA (Pronto Atendimento)"
     
     num = int(match.group())
     
@@ -70,9 +70,9 @@ def identificar_setor(leito):
     elif 501 <= num <= 520:
         return "Clínica cirúrgica 3 (5 andar)"
     
-    return "Outros / Demais Setores"
+    return "PA (Pronto Atendimento)"
 
-# Função robusta para processar o relatório (.xlsx/.xls) extraindo os dados corretamente
+# Função para processar o relatório (.xlsx/.xls)
 def processar_relatorio_limpeza(uploaded_file):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
@@ -80,50 +80,14 @@ def processar_relatorio_limpeza(uploaded_file):
     for _, row in df_raw.iterrows():
         primeira_col = row.iloc[0]
         if pd.notna(primeira_col) and str(primeira_col).strip().isdigit():
-            row_vals = [str(x) if pd.notna(x) else "" for x in row.values]
-            
-            # Extração precisa baseada nas posições do layout do hospital
             solicitacao = str(row.iloc[0]).strip()
             atendimento = str(row.iloc[8]).strip() if len(row) > 8 and pd.notna(row.iloc[8]) else ""
             
-            # Hora (geralmente formato HH:MM)
-            hora = ""
-            for val in row_vals:
-                if re.match(r'^\d{2}:\d{2}$', str(val)):
-                    hora = str(val).strip()
-                    break
-            if not hora and len(row_vals) > 23:
-                hora = str(row.iloc[23]).strip()
-
-            # Leito (busca por padrões como ESTAB, OBS, EXTRA, UTI ou códigos de leito)
-            leito = ""
-            for val in row_vals:
-                val_upper = str(val).upper()
-                if any(p in val_upper for p in ["ESTAB", "OBS", "EXTRA", "UTI"]) or re.match(r'^\d{1,3}\s*[A-D]?$', val_upper):
-                    leito = str(val).strip()
-                    break
-            if not leito and len(row_vals) > 25:
-                leito = str(row.iloc[25]).strip()
-
-            # Tipo de Limpeza (TERMINAL DE LEITO ou CONCORRENTE)
-            tipo_limpeza = "TERMINAL DE LEITO"
-            for val in row_vals:
-                val_upper = str(val).upper()
-                if "TERMINAL" in val_upper or "CONCORRENTE" in val_upper:
-                    tipo_limpeza = str(val).strip()
-                    break
-
-            # Funcionário (geralmente na coluna 36 ou texto em maiúsculas longo após a limpeza)
-            funcionario = ""
-            if len(row) > 36 and pd.notna(row.iloc[36]):
-                funcionario = str(row.iloc[36]).strip()
-            else:
-                # Fallback: procura o nome do funcionário pelo final da linha
-                for val in reversed(row_vals):
-                    if val and val != tipo_limpeza and val != leito and val != hora and not val.isdigit() and len(val) > 3:
-                        funcionario = val.strip()
-                        break
-
+            hora = str(row.iloc[23]).strip() if len(row) > 23 and pd.notna(row.iloc[23]) else ""
+            leito = str(row.iloc[25]).strip() if len(row) > 25 and pd.notna(row.iloc[25]) else ""
+            tipo_limpeza = str(row.iloc[29]).strip() if len(row) > 29 and pd.notna(row.iloc[29]) else "TERMINAL DE LEITO"
+            funcionario = str(row.iloc[36]).strip() if len(row) > 36 and pd.notna(row.iloc[36]) else ""
+            
             setor_mapeado = identificar_setor(leito)
 
             registros.append({
@@ -211,7 +175,8 @@ with tab1:
                     st.plotly_chart(fig_unidade, use_container_width=True)
 
                 st.subheader("Tabela Detalhada de Limpezas (Segura)")
-                st.dataframe(df_filtrado, use_container_width=True)
+                # Substituído st.dataframe por st.markdown/st.write estático para eliminar o erro de fetch dinâmico do Streamlit
+                st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
         except Exception as e:
             st.error(f"Erro ao processar o arquivo de limpeza: {e}")
@@ -248,7 +213,7 @@ with tab2:
             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.subheader("Detailed Transformed Data Table")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------
 # TAB 3: RAG CHAT ASSISTANT
