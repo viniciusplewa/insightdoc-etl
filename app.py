@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 import pandas as pd
 import plotly.express as px
@@ -29,38 +30,73 @@ def load_data():
     conn.close()
     return df
 
-# Função para processar o relatório de histórico de quartos / limpezas (Com LGPD/Anonimização)
+# Função de Mapeamento Inteligente de Setores baseada nos Leitos
+def identificar_setor(leito):
+    leito_str = str(leito).strip().upper()
+    
+    # 1. Identificação do PA por prefixo
+    if any(prefix in leito_str for prefix in ["OBS M", "OBS F", "EXTRA", "ESTAB", "MED"]):
+        return "PA (Pronto Atendimento)"
+    
+    # Extrai o número do leito para fazer o mapeamento por faixa
+    match = re.search(r'\d+', leito_str)
+    if not match:
+        return "Outros / Não Especificado"
+    
+    num = int(match.group())
+    
+    # 2. Mapeamento por faixas numéricas e andares (Conforme sua regra)
+    if 101 <= num <= 112:
+        return "Semi intensiva (1 andar)"
+    elif 113 <= num <= 122:
+        return "Hospital dia (1 andar)"
+    elif 200 <= num <= 299:
+        return "Clínica Médica (2 andar)"
+    elif 301 <= num <= 310:
+        return "Clínica cirúrgica 1 (3 andar)"
+    elif 311 <= num <= 320:
+        return "Clínica cirúrgica pediátrica (3 andar)"
+    elif 321 <= num <= 330:
+        return "UTI 1 (3 andar)"
+    elif 331 <= num <= 340:
+        return "UTI 5 (3 andar)"
+    elif 341 <= num <= 350:
+        return "UTI Pediátrica (3 andar)"
+    elif 401 <= num <= 420:
+        return "Clínica cirúrgica 2 (4 andar)"
+    elif 421 <= num <= 430:
+        return "UTI 2 (4 andar)"
+    elif 431 <= num <= 440:
+        return "UTI 3 (4 andar)"
+    elif 441 <= num <= 450:
+        return "UTI 4 (4 andar)"
+    elif 501 <= num <= 520:
+        return "Clínica cirúrgica 3 (5 andar)"
+    
+    return "Outros / Demais Setores"
+
+# Função para processar o relatório de histórico de quartos / limpezas (Com LGPD e Mapeamento de Setores)
 def processar_relatorio_limpeza(uploaded_file):
-    df_raw = pd.read_excel(uploaded_file, sheet_name=0)
+    df_raw = pd.read_excel(uploaded_file, sheet_name=0, engine="xlrd")
 
     registros = []
-    unidade_atual = "Não especificada"
 
     for i, row in df_raw.iterrows():
-        row_str = str(row.values)
-        # Identifica linha de Unidade de Internação
-        if "Unidade de Internação" in row_str:
-            for val in row.values:
-                if (
-                    pd.notna(val)
-                    and val != "Unidade de Internação :"
-                    and isinstance(val, str)
-                ):
-                    unidade_atual = val.strip()
-                    break
-
-        # Identifica linha de registro de limpeza (ex: número de solicitação válido)
+        # Identifica linha de registro de limpeza válida (número de solicitação na primeira coluna)
         primeira_col = row.iloc[0]
         if pd.notna(primeira_col) and str(primeira_col).strip().isdigit():
+            leito_val = str(row.iloc[24]) if len(row) > 24 else ""
+            setor_mapeado = identificar_setor(leito_val)
+            
             registros.append({
                 "Solicitação": str(row.iloc[0]),
                 "Atendimento": str(row.iloc[7]) if len(row) > 7 else "",
-                # 'Paciente' foi omitido intencionalmente para garantir conformidade com a LGPD e privacidade
+                # 'Paciente' omitido intencionalmente para garantir conformidade com a LGPD e privacidade
                 "Hora": str(row.iloc[22]) if len(row) > 22 else "",
-                "Leito": str(row.iloc[24]) if len(row) > 24 else "",
+                "Leito": leito_val,
                 "Tipo de Limpeza": str(row.iloc[28]) if len(row) > 28 else "",
                 "Funcionário": str(row.iloc[31]) if len(row) > 31 else "",
-                "Unidade de Internação": unidade_atual,
+                "Unidade de Internação": setor_mapeado,
             })
 
     return pd.DataFrame(registros)
