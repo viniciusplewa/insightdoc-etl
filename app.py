@@ -30,139 +30,100 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Função de Mapeamento Inteligente de Setores baseada nos Leitos
-def identificar_setor(leito):
-    leito_str = str(leito).strip().upper()
+# Função vetorizada ultra-rápida para mapear setores baseada nos leitos
+def identificar_setor_serie(leitos_series):
+    leitos_upper = leitos_series.fillna("PA").astype(str).str.strip().str.upper()
     
-    if any(p in leito_str for p in ["OBS M", "OBS F", "EXTRA", "ESTAB", "MED", "EX"]):
-        return "PA (Pronto Atendimento)"
+    # Condição padrão
+    setores = pd.Series("PA (Pronto Atendimento)", index=leitos_series.index)
     
-    match = re.search(r'\d+', leito_str)
-    if not match:
-        return "PA (Pronto Atendimento)"
+    # Extrai números dos leitos de forma vetorizada
+    num_leitos = leitos_upper.str.extract(r'(\d+)', expand=False).astype(float)
     
-    num = int(match.group())
+    setores[leitos_upper.str.contains("OBS M|OBS F|EXTRA|ESTAB|MED|EX", na=False)] = "PA (Pronto Atendimento)"
     
-    if 101 <= num <= 112:
-        return "Semi intensiva (1 andar)"
-    elif 113 <= num <= 122:
-        return "Hospital dia (1 andar)"
-    elif 200 <= num <= 299:
-        return "Clínica Médica (2 andar)"
-    elif 301 <= num <= 310:
-        return "Clínica cirúrgica 1 (3 andar)"
-    elif 311 <= num <= 320:
-        return "Clínica cirúrgica pediátrica (3 andar)"
-    elif 321 <= num <= 330:
-        return "UTI 1 (3 andar)"
-    elif 331 <= num <= 340:
-        return "UTI 5 (3 andar)"
-    elif 341 <= num <= 350:
-        return "UTI Pediátrica (3 andar)"
-    elif 401 <= num <= 420:
-        return "Clínica cirúrgica 2 (4 andar)"
-    elif 421 <= num <= 430:
-        return "UTI 2 (4 andar)"
-    elif 431 <= num <= 440:
-        return "UTI 3 (4 andar)"
-    elif 441 <= num <= 450:
-        return "UTI 4 (4 andar)"
-    elif 501 <= num <= 520:
-        return "Clínica cirúrgica 3 (5 andar)"
+    setores[(num_leitos >= 101) & (num_leitos <= 112)] = "Semi intensiva (1 andar)"
+    setores[(num_leitos >= 113) & (num_leitos <= 122)] = "Hospital dia (1 andar)"
+    setores[(num_leitos >= 200) & (num_leitos <= 299)] = "Clínica Médica (2 andar)"
+    setores[(num_leitos >= 301) & (num_leitos <= 310)] = "Clínica cirúrgica 1 (3 andar)"
+    setores[(num_leitos >= 311) & (num_leitos <= 320)] = "Clínica cirúrgica pediátrica (3 andar)"
+    setores[(num_leitos >= 321) & (num_leitos <= 330)] = "UTI 1 (3 andar)"
+    setores[(num_leitos >= 331) & (num_leitos <= 340)] = "UTI 5 (3 andar)"
+    setores[(num_leitos >= 341) & (num_leitos <= 350)] = "UTI Pediátrica (3 andar)"
+    setores[(num_leitos >= 401) & (num_leitos <= 420)] = "Clínica cirúrgica 2 (4 andar)"
+    setores[(num_leitos >= 421) & (num_leitos <= 430)] = "UTI 2 (4 andar)"
+    setores[(num_leitos >= 431) & (num_leitos <= 440)] = "UTI 3 (4 andar)"
+    setores[(num_leitos >= 441) & (num_leitos <= 450)] = "UTI 4 (4 andar)"
+    setores[(num_leitos >= 501) & (num_leitos <= 520)] = "Clínica cirúrgica 3 (5 andar)"
     
-    return "PA (Pronto Atendimento)"
+    return setores
 
-# Função para classificar o turno com base na hora
-def identificar_turno(hora_str):
-    if not hora_str or ":" not in str(hora_str):
-        return "Não Especificado"
-    try:
-        partes = str(hora_str).strip().split(":")
-        hora_num = int(partes[0])
-        minuto_num = int(partes[1])
+# Função vetorizada para classificar o turno com base na hora
+def identificar_turno_serie(horas_series):
+    horas_str = horas_series.fillna("").astype(str).str.strip()
+    turnos = pd.Series("Não Especificado", index=horas_series.index)
+    
+    valido = horas_str.str.contains(r'^\d{2}:\d{2}$', na=False)
+    if valido.any():
+        partes = horas_str[valido].str.split(":", expand=True)
+        h_num = partes[0].astype(int)
+        m_num = partes[1].astype(int)
+        total_min = h_num * 60 + m_num
         
-        total_minutos = hora_num * 60 + minuto_num
-        inicio_diurno = 7 * 60   # 07:00
-        fim_diurno = 19 * 60     # 19:00
+        diurno = (total_min >= 420) & (total_min <= 1140) # 07:00 a 19:00
+        turnos[valido & diurno] = "Diurno (07:00 - 19:00)"
+        turnos[valido & ~diurno] = "Noturno"
         
-        if inicio_diurno <= total_minutos <= fim_diurno:
-            return "Diurno (07:00 - 19:00)"
-        else:
-            return "Noturno"
-    except Exception:
-        return "Não Especificado"
+    return turnos
 
-# Função otimizada para processar relatórios grandes com baixo consumo de memória
+# Função de processamento de alta performance para arquivos grandes
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
-    # Lendo o Excel de forma otimizada para evitar estouro de RAM em ficheiros grandes
+    # Lê o Excel ignorando formatações pesadas
     df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
-    registros = []
+    
+    # Filtra apenas linhas válidas onde a primeira coluna é um número de solicitação
+    col_zero = df_raw.iloc[:, 0].fillna("").astype(str).str.strip()
+    mask_Validas = col_zero.str.isdigit()
+    df_filtrado = df_raw[mask_Validas].copy()
+    
+    if df_filtrado.empty:
+        return pd.DataFrame()
 
-    for _, row in df_raw.iterrows():
-        primeira_col = row.iloc[0]
-        if pd.notna(primeira_col) and str(primeira_col).strip().isdigit():
-            row_vals = [str(x).strip() for x in row.values if pd.notna(x) and str(x).strip() != "nan"]
-            
-            solicitacao = str(row.iloc[0]).strip()
-            
-            # Hora
-            hora = ""
-            for val in row_vals:
-                if re.match(r'^\d{2}:\d{2}$', val):
-                    hora = val
-                    break
-            if not hora and len(row.values) > 23 and pd.notna(row.iloc[23]):
-                hora = str(row.iloc[23]).strip()
+    # Extração de colunas de forma segura e rápida
+    solicitacao = df_filtrado.iloc[:, 0].astype(str).str.strip()
+    
+    # Procura hora (coluna 23 se existir ou busca padrão)
+    hora = pd.Series("", index=df_filtrado.index)
+    if df_filtrado.shape[1] > 23:
+        hora = df_filtrado.iloc[:, 23].fillna("").astype(str).str.strip()
+    
+    # Procura leito (coluna 25 se existir)
+    leito = pd.Series("PA", index=df_filtrado.index)
+    if df_filtrado.shape[1] > 25:
+        leito = df_filtrado.iloc[:, 25].fillna("PA").astype(str).str.strip()
+        leito = leito.replace("", "PA")
 
-            # Leito
-            leito = ""
-            for val in row_vals:
-                val_upper = val.upper()
-                if any(p in val_upper for p in ["ESTAB", "OBS", "EXTRA", "ISO", "OBES", "MED", "EX"]) or re.match(r'^\d{3}\s*[A-D]?$', val_upper):
-                    leito = val
-                    break
-            if not leito and len(row.values) > 25 and pd.notna(row.iloc[25]):
-                leito = str(row.iloc[25]).strip()
-            if not leito:
-                leito = "PA"
+    # Tipo de limpeza padrão
+    tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_filtrado.index)
+    
+    # Funcionário (coluna 36 se existir)
+    funcionario = pd.Series("", index=df_filtrado.index)
+    if df_filtrado.shape[1] > 36:
+        funcionario = df_filtrado.iloc[:, 36].fillna("").astype(str).str.strip()
 
-            # Tipo de Limpeza
-            tipo_limpeza = "TERMINAL DE LEITO"
-            for val in row_vals:
-                val_upper = val.upper()
-                if "CONCORRENTE" in val_upper:
-                    tipo_limpeza = "CONCORRENTE"
-                    break
-                elif "TERMINAL" in val_upper:
-                    tipo_limpeza = "TERMINAL DE LEITO"
-                    break
+    # Monta o DataFrame final vetorizado (instantâneo)
+    df_final = pd.DataFrame({
+        "Origem / Período": nome_origem,
+        "Solicitação": solicitacao,
+        "Hora": hora,
+        "Turno": identificar_turno_serie(hora),
+        "Leito": leito,
+        "Tipo de Limpeza": tipo_limpeza,
+        "Funcionário": funcionario,
+        "Unidade de Internação": identificar_setor_serie(leito),
+    })
 
-            # Funcionário
-            funcionario = ""
-            if len(row.values) > 36 and pd.notna(row.iloc[36]):
-                funcionario = str(row.iloc[36]).strip()
-            else:
-                for val in reversed(row_vals):
-                    val_upper = val.upper()
-                    if val_upper not in [tipo_limpeza.upper(), leito.upper(), hora, solicitacao] and not val.isdigit() and len(val) > 3:
-                        funcionario = val
-                        break
-
-            setor_mapeado = identificar_setor(leito)
-            turno_mapeado = identificar_turno(hora)
-
-            registros.append({
-                "Origem / Período": nome_origem,
-                "Solicitação": solicitacao,
-                "Hora": hora,
-                "Turno": turno_mapeado,
-                "Leito": leito,
-                "Tipo de Limpeza": tipo_limpeza,
-                "Funcionário": funcionario,
-                "Unidade de Internação": setor_mapeado,
-            })
-
-    return pd.DataFrame(registros)
+    return df_final
 
 # Main Title & Header
 st.title("🏥 InsightDoc-ETL: Gestão Hospitalar & Comparador de Limpezas")
@@ -170,7 +131,7 @@ st.markdown("---")
 
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** (formatos grandes suportados com otimização de memória) "
+    "Faça o upload de **uma ou duas planilhas** (suporte de alta performance para arquivos pesados) "
     "para realizar análises isoladas ou uma **comparação lado a lado** com total segurança (LGPD Ativada)."
 )
 
@@ -181,22 +142,26 @@ with col_up1:
 with col_up2:
     arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xlsx", "xls"], key="file2")
 
-# Processamento dos arquivos com tratamento de erro de memória
+# Processamento dos arquivos
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    try:
-        df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
-        dfs_combinados.append(df1)
-    except Exception as e:
-        st.error(f"Erro ao processar a 1ª planilha: {e}")
+    with st.spinner("A processar a 1ª planilha (alta performance)..."):
+        try:
+            df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
+            if not df1.empty:
+                dfs_combinados.append(df1)
+        except Exception as e:
+            st.error(f"Erro ao processar a 1ª planilha: {e}")
 
 if arquivo_2 is not None:
-    try:
-        df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
-        dfs_combinados.append(df2)
-    except Exception as e:
-        st.error(f"Erro ao processar a 2ª planilha: {e}")
+    with st.spinner("A processar a 2ª planilha (alta performance)..."):
+        try:
+            df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
+            if not df2.empty:
+                dfs_combinados.append(df2)
+        except Exception as e:
+            st.error(f"Erro ao processar a 2ª planilha: {e}")
 
 if len(dfs_combinados) > 0:
     df_limpeza = pd.concat(dfs_combinados, ignore_index=True)
@@ -204,7 +169,7 @@ if len(dfs_combinados) > 0:
     if df_limpeza.empty:
         st.warning("⚠️ Não foram encontrados registros estruturados nas planilhas enviadas.")
     else:
-        st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza)}")
+        st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza):,}".replace(",", "."))
         st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram ocultados.")
 
         # Filtros Globais
@@ -229,9 +194,9 @@ if len(dfs_combinados) > 0:
             df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
 
         m1, m2, m3 = st.columns(3)
-        m1.metric("Total de Limpezas Filtradas", len(df_filtrado))
-        m2.metric("Limpezas Terminais", len(df_filtrado[df_filtrado["Tipo de Limpeza"].str.contains("TERMINAL", case=False, na=False)]))
-        m3.metric("Limpezas Concorrentes", len(df_filtrado[df_filtrado["Tipo de Limpeza"].str.contains("CONCORRENTE", case=False, na=False)]))
+        m1.metric("Total de Limpezas Filtradas", f"{len(df_filtrado):,}".replace(",", "."))
+        m2.metric("Limpezas Terminais", f"{len(df_filtrado[df_filtrado['Tipo de Limpeza'].str.contains('TERMINAL', case=False, na=False)]):,}".replace(",", "."))
+        m3.metric("Limpezas Concorrentes", f"{len(df_filtrado[df_filtrado['Tipo de Limpeza'].str.contains('CONCORRENTE', case=False, na=False)]):,}".replace(",", "."))
 
         st.markdown("---")
 
