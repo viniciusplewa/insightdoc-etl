@@ -74,37 +74,48 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função robusta de processamento com blindagem LGPD
+# Função otimizada e leve para processar relatórios sem sobrecarregar a memória
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
     nome_arquivo = uploaded_file.name.lower()
     
-    if nome_arquivo.endswith('.csv'):
-        try:
-            df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python', dtype=str)
-        except Exception:
-            uploaded_file.seek(0)
-            df_raw = pd.read_csv(uploaded_file, encoding='latin1', sep=None, engine='python', dtype=str)
-    else:
-        df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
+    try:
+        if nome_arquivo.endswith('.csv'):
+            try:
+                df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python', dtype=str, nrows=200000)
+            except Exception:
+                uploaded_file.seek(0)
+                df_raw = pd.read_csv(uploaded_file, encoding='latin1', sep=None, engine='python', dtype=str, nrows=200000)
+        else:
+            df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
+    except Exception as e:
+        st.error(f"Erro ao ler o arquivo {uploaded_file.name}: {e}")
+        return pd.DataFrame()
     
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
+    # Identificação rápida de colunas por nome padrão
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
     col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
     col_tipo = next((c for c in df_raw.columns if any(k in c for k in ["TIPO", "LIMPEZA"])), None)
 
     solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
-    # Varredura inteligente aprimorada para extrair a hora em formato HH:MM de qualquer coluna de data/hora
+    # Extração segura de hora focando nas colunas mais prováveis ou na primeira que contenha o padrão
     hora = pd.Series("", index=df_raw.index)
-    for col in df_raw.columns:
-        if any(k in col for k in ["PACIENTE", "NOME", "FUNCIONARIO", "COLABORADOR"]):
-            continue # Evita procurar em colunas de nomes de pessoas
+    candidatas_hora = [c for c in df_raw.columns if any(k in c for k in ["HORA", "DATA", "EMISSAO"])]
+    
+    for col in candidatas_hora:
         amostra = df_raw[col].fillna("").astype(str).str.strip()
         if amostra.str.contains(r'\d{2}:\d{2}', na=False).any():
-            extraido = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
-            if (extraido != "").any():
-                hora = extraido
+            hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
+            break
+            
+    # Se ainda não encontrou, pega a primeira coluna que tiver o padrão HH:MM nas primeiras 100 linhas (super rápido)
+    if (hora == "").all():
+        for col in df_raw.columns[:15]:
+            amostra = df_raw[col].fillna("").astype(str).str.strip()
+            if amostra.head(100).str.contains(r'\d{2}:\d{2}', na=False).any():
+                hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
                 break
 
     # Leito
@@ -113,9 +124,9 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
         leito = leito.replace("", "PA")
     else:
-        for col in df_raw.columns:
+        for col in df_raw.columns[:15]:
             amostra = df_raw[col].fillna("").astype(str).str.upper()
-            if amostra.str.contains("ESTAB|OBS|EXTRA|ISO|OBES|MED", na=False).any():
+            if amostra.head(100).str.contains("ESTAB|OBS|EXTRA|ISO|OBES|MED", na=False).any():
                 leito = df_raw[col].fillna("PA").astype(str).str.strip()
                 break
 
@@ -125,14 +136,14 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         val_tipo = df_raw[col_tipo].fillna("").astype(str).str.upper()
         tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
     else:
-        for col in df_raw.columns:
+        for col in df_raw.columns[:15]:
             amostra = df_raw[col].fillna("").astype(str).str.upper()
-            if amostra.str.contains("CONCORRENTE|TERMINAL", na=False).any():
+            if amostra.head(100).str.contains("CONCORRENTE|TERMINAL", na=False).any():
                 val_tipo = df_raw[col].fillna("").astype(str).str.upper()
                 tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
                 break
 
-    # LGPD Compliance: Oculta totalmente qualquer dado de paciente ou funcionário
+    # LGPD Compliance: Oculta totalmente qualquer dado sensível
     funcionario_protegido = pd.Series("🔒 [LGPD Ocultado]", index=df_raw.index)
 
     df_final = pd.DataFrame({
@@ -168,22 +179,16 @@ with col_up2:
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    with st.spinner("A processar a 1ª planilha..."):
-        try:
-            df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
-            if not df1.empty:
-                dfs_combinados.append(df1)
-        except Exception as e:
-            st.error(f"Erro ao processar a 1ª planilha: {e}")
+    with st.spinner("A processar a 1ª planilha em alta performance..."):
+        df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
+        if not df1.empty:
+            dfs_combinados.append(df1)
 
 if arquivo_2 is not None:
-    with st.spinner("A processar a 2ª planilha..."):
-        try:
-            df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
-            if not df2.empty:
-                dfs_combinados.append(df2)
-        except Exception as e:
-            st.error(f"Erro ao processar a 2ª planilha: {e}")
+    with st.spinner("A processar a 2ª planilha em alta performance..."):
+        df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
+        if not df2.empty:
+            dfs_combinados.append(df2)
 
 if len(dfs_combinados) > 0:
     df_limpeza = pd.concat(dfs_combinados, ignore_index=True)
@@ -331,7 +336,7 @@ if len(dfs_combinados) > 0:
                 label="📥 Baixar CSV Combinado",
                 data=csv_bytes,
                 file_name="relatorio_comparativo_limpezas.csv",
-                mime="text/csv",
+                mime="text/css",
                 use_container_width=True
             )
 
