@@ -228,44 +228,53 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # Gráficos Comparativos (Se houver 2 planilhas, os gráficos dividem-se por cor com base na 'Origem / Período')
-        g1, g2 = st.columns(2)
-        with g1:
-            st.subheader("Proporção por Tipo de Limpeza")
-            fig_tipo = px.pie(
-                df_filtrado,
-                names="Tipo de Limpeza",
-                values=df_filtrado.index.to_series().map(lambda x: 1), # Conta ocorrências
-                title="Distribuição Geral",
-                color_discrete_sequence=["#FF5733", "#3357FF"]
-            )
-            fig_tipo.update_layout(height=450, font=dict(size=13))
-            st.plotly_chart(fig_tipo, use_container_width=True)
+        # 1. GRÁFICOS DE PIZZA SEPARADOS (Um para cada planilha enviada)
+        st.subheader("Proporção por Tipo de Limpeza (Separado por Planilha)")
+        origens_presentes = df_filtrado["Origem / Período"].unique()
+        
+        cols_pizza = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
+        for i, origem in enumerate(origens_presentes):
+            with cols_pizza[i]:
+                df_origem = df_filtrado[df_filtrado["Origem / Período"] == origem]
+                tipo_counts = df_origem["Tipo de Limpeza"].value_counts().reset_index()
+                tipo_counts.columns = ["Tipo de Limpeza", "Quantidade"]
+                
+                fig_p = px.pie(
+                    tipo_counts,
+                    names="Tipo de Limpeza",
+                    values="Quantidade",
+                    title=f"Distribuição - {origem}",
+                    color_discrete_sequence=["#FF5733", "#2980B9"]
+                )
+                fig_p.update_layout(height=400, font=dict(size=13), title_font=dict(size=15))
+                st.plotly_chart(fig_p, use_container_width=True)
 
-        with g2:
-            st.subheader("Volume por Unidade de Internação (Comparativo)")
-            # Gráfico de barras agrupadas por Unidade e colorido pela Origem/Planilha
-            fig_unidade = px.histogram(
-                df_filtrado,
-                x="Unidade de Internação",
-                color="Origem / Período",
-                barmode="group",
-                title="Comparativo de Volume entre Planilhas",
-                text_auto=True,
-                color_discrete_sequence=["#2980B9", "#E67E22"] # Cores distintas para Planilha 1 e Planilha 2
-            )
-            fig_unidade.update_layout(
-                height=480,
-                font=dict(size=12),
-                xaxis=dict(tickangle=-35, title="Unidades de Internação"),
-                yaxis=dict(title="Quantidade"),
-                legend=dict(title=dict(text="<b>Planilha</b>"))
-            )
-            st.plotly_chart(fig_unidade, use_container_width=True)
-
-        # Gráfico de Picos por Horário Comparativo (00h às 23h)
         st.markdown("---")
-        st.subheader("📈 Comparativo de Picos por Horário do Dia")
+
+        # 2. GRÁFICO DE BARRAS (Com números mais legíveis e espaçamento otimizado)
+        st.subheader("Volume por Unidade de Internação (Comparativo)")
+        fig_unidade = px.histogram(
+            df_filtrado,
+            x="Unidade de Internação",
+            color="Origem / Período",
+            barmode="group",
+            title="Comparativo de Volume entre Planilhas",
+            text_auto=True,
+            color_discrete_sequence=["#2980B9", "#E67E22"]
+        )
+        fig_unidade.update_traces(textfont_size=10, textangle=0, textposition="outside", cliponaxis=False)
+        fig_unidade.update_layout(
+            height=550,
+            font=dict(size=12),
+            xaxis=dict(tickangle=-35, title="Unidades de Internação"),
+            yaxis=dict(title="Quantidade", range=[0, df_filtrado.groupby(["Unidade de Internação", "Origem / Período"]).size().max() * 1.2]),
+            legend=dict(title=dict(text="<b>Planilha</b>"))
+        )
+        st.plotly_chart(fig_unidade, use_container_width=True)
+
+        # 3. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Maior altura e números visíveis permanentemente)
+        st.markdown("---")
+        st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
         def extrair_hora_inteira(hora_str):
             if not hora_str or ":" not in str(hora_str):
@@ -274,13 +283,10 @@ if len(dfs_combinados) > 0:
 
         df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
         
-        # Agrupa por Hora e por Origem/Período para comparar as linhas
         df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"]).size().reset_index(name="Quantidade")
         
-        # Garante que todas as 24 horas existam para ambas as origens
         horas_base = []
-        origens = df_filtrado["Origem / Período"].unique()
-        for orig in origens:
+        for orig in origens_presentes:
             for h in range(24):
                 horas_base.append({"Hora_Num": h, "Origem / Período": orig})
         
@@ -295,11 +301,19 @@ if len(dfs_combinados) > 0:
             y="Quantidade",
             color="Origem / Período",
             markers=True,
-            title="Evolução Temporal Comparativa (00h às 23h)",
+            title="Evolução Temporal Comparativa Detalhada",
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
+        # Força os números a aparecerem permanentemente em cima de cada ponto
+        fig_hora.update_traces(
+            mode="lines+markers+text",
+            text=df_horas_final["Quantidade"],
+            textposition="top center",
+            textfont=dict(size=11, family="Arial Black"),
+            line=dict(width=3)
+        )
         fig_hora.update_layout(
-            height=450,
+            height=600,  # Altura bem maior para facilitar a visualização e comparação clara
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
