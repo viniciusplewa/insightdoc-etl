@@ -81,7 +81,6 @@ def identificar_turno(hora_str):
         hora_num = int(partes[0])
         minuto_num = int(partes[1])
         
-        # Converte para minutos totais do dia para precisão exata
         total_minutos = hora_num * 60 + minuto_num
         inicio_diurno = 7 * 60   # 07:00
         fim_diurno = 19 * 60     # 19:00
@@ -199,7 +198,7 @@ with tab1:
                 st.success(f"Planilha processada com sucesso! Total de registros: {len(df_limpeza)}")
                 st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram excluídos do processamento para garantir total sigilo.")
 
-                # Filtros adicionando o Turno
+                # Filtros
                 col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
                     unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
@@ -227,19 +226,36 @@ with tab1:
 
                 st.markdown("---")
 
+                # Paleta de cores vibrantes e chamativas (Laranja neon/coral, Azul elétrico, Verde vibrante, Roxo)
+                cores_vibrantes = ["#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3", "#33FFF6", "#FFA533"]
+
                 g1, g2 = st.columns(2)
                 with g1:
                     st.subheader("Distribuição por Tipo de Limpeza")
                     tipo_counts = df_filtrado["Tipo de Limpeza"].value_counts().reset_index()
                     tipo_counts.columns = ["Tipo de Limpeza", "Quantidade"]
-                    fig_tipo = px.pie(tipo_counts, names="Tipo de Limpeza", values="Quantidade", title="Proporção de Limpezas")
+                    fig_tipo = px.pie(
+                        tipo_counts,
+                        names="Tipo de Limpeza",
+                        values="Quantidade",
+                        title="Proporção de Limpezas",
+                        color_discrete_sequence=["#FF5733", "#3357FF"] # Cores chamativas específicas para o tipo de limpeza
+                    )
                     st.plotly_chart(fig_tipo, use_container_width=True)
 
                 with g2:
                     st.subheader("Limpezas por Unidade de Internação")
                     unidade_counts = df_filtrado["Unidade de Internação"].value_counts().reset_index()
                     unidade_counts.columns = ["Unidade", "Quantidade"]
-                    fig_unidade = px.bar(unidade_counts, x="Unidade", y="Quantidade", text_auto=True, title="Volume por Unidade")
+                    fig_unidade = px.bar(
+                        unidade_counts,
+                        x="Unidade",
+                        y="Quantidade",
+                        text_auto=True,
+                        title="Volume por Unidade",
+                        color="Unidade",
+                        color_discrete_sequence=px.colors.qualitative.Bold # Paleta de cores forte e chamativa do Plotly
+                    )
                     st.plotly_chart(fig_unidade, use_container_width=True)
 
                 st.subheader("Tabela Detalhada de Limpezas (Segura)")
