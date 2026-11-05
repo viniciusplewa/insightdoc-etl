@@ -72,7 +72,7 @@ def identificar_setor(leito):
     
     return "PA (Pronto Atendimento)"
 
-# Função para classificar o turno com base na hora (07:00 às 19:00 = Diurno, restante = Noturno)
+# Função para classificar o turno com base na hora
 def identificar_turno(hora_str):
     if not hora_str or ":" not in str(hora_str):
         return "Não Especificado"
@@ -93,7 +93,7 @@ def identificar_turno(hora_str):
         return "Não Especificado"
 
 # Função para processar o relatório de forma segura (LGPD Compliance)
-def processar_relatorio_limpeza(uploaded_file):
+def processar_relatorio_limpeza(uploaded_file, nome_origem):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
 
@@ -151,6 +151,7 @@ def processar_relatorio_limpeza(uploaded_file):
             turno_mapeado = identificar_turno(hora)
 
             registros.append({
+                "Origem / Período": nome_origem,
                 "Solicitação": solicitacao,
                 "Hora": hora,
                 "Turno": turno_mapeado,
@@ -163,168 +164,166 @@ def processar_relatorio_limpeza(uploaded_file):
     return pd.DataFrame(registros)
 
 # Main Title & Header
-st.title("🏥 InsightDoc-ETL: Gestão Hospitalar & Limpezas")
+st.title("🏥 InsightDoc-ETL: Gestão Hospitalar & Comparador de Limpezas")
 st.markdown("---")
 
-st.header("Análise de Limpezas de Quartos (Terminais e Concorrentes)")
+st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload do relatório Excel **`R_HISTORICO_QUARTOS`** para analisar "
-    "os dados em tempo real com total segurança (dados de pacientes e atendimentos ocultados)."
+    "Faça o upload de **uma ou duas planilhas** para realizar análises isoladas ou uma **comparação lado a lado** "
+    "entre períodos diferentes com total segurança (LGPD Ativada)."
 )
 
-arquivo_limpeza = st.file_uploader(
-    "Enviar Planilha de Histórico de Quartos (.xls / .xlsx)",
-    type=["xls", "xlsx"],
-)
+# Layout com duas colunas para upload independente
+col_up1, col_up2 = st.columns(2)
+with col_up1:
+    arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xls", "xlsx"], key="file1")
+with col_up2:
+    arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xls", "xlsx"], key="file2")
 
-if arquivo_limpeza is not None:
-    try:
-        df_limpeza = processar_relatorio_limpeza(arquivo_limpeza)
+# Processamento dos arquivos
+dfs_combinados = []
 
-        if df_limpeza.empty:
-            st.warning("⚠️ Não foram encontrados registros estruturados na planilha enviada.")
-        else:
-            st.success(f"Planilha processada com sucesso! Total de registros: {len(df_limpeza)}")
-            st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram excluídos do processamento para garantir total sigilo.")
+if arquivo_1 is not None:
+    df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
+    dfs_combinados.append(df1)
 
-            # Filtros
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
-                unidade_filtro = st.selectbox("Filtrar por Unidade de Internação", unidades_disponiveis)
-            with col_f2:
-                tipos_disponiveis = ["Todos"] + list(df_limpeza["Tipo de Limpeza"].unique())
-                tipo_filtro = st.selectbox("Filtrar por Tipo de Limpeza", tipos_disponiveis)
-            with col_f3:
-                turnos_disponiveis = ["Todos"] + list(df_limpeza["Turno"].unique())
-                turno_filtro = st.selectbox("Filtrar por Turno", turnos_disponiveis)
+if arquivo_2 is not None:
+    df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
+    dfs_combinados.append(df2)
 
-            # Aplicando filtros
-            df_filtrado = df_limpeza.copy()
-            if unidade_filtro != "Todas":
-                df_filtrado = df_filtrado[df_filtrado["Unidade de Internação"] == unidade_filtro]
-            if tipo_filtro != "Todos":
-                df_filtrado = df_filtrado[df_filtrado["Tipo de Limpeza"] == tipo_filtro]
-            if turno_filtro != "Todos":
-                df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
+if len(dfs_combinados) > 0:
+    df_limpeza = pd.concat(dfs_combinados, ignore_index=True)
 
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Total de Limpezas Filtradas", len(df_filtrado))
-            m2.metric("Limpezas Terminais", len(df_filtrado[df_filtrado["Tipo de Limpeza"].str.contains("TERMINAL", case=False, na=False)]))
-            m3.metric("Limpezas Concorrentes", len(df_filtrado[df_filtrado["Tipo de Limpeza"].str.contains("CONCORRENTE", case=False, na=False)]))
+    if df_limpeza.empty:
+        st.warning("⚠️ Não foram encontrados registros estruturados nas planilhas enviadas.")
+    else:
+        st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza)}")
+        st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram ocultados.")
 
-            st.markdown("---")
+        # Filtros Globais
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
+            unidade_filtro = st.selectbox("Filtrar por Unidade de Internação", unidades_disponiveis)
+        with col_f2:
+            tipos_disponiveis = ["Todos"] + list(df_limpeza["Tipo de Limpeza"].unique())
+            tipo_filtro = st.selectbox("Filtrar por Tipo de Limpeza", tipos_disponiveis)
+        with col_f3:
+            turnos_disponiveis = ["Todos"] + list(df_limpeza["Turno"].unique())
+            turno_filtro = st.selectbox("Filtrar por Turno", turnos_disponiveis)
 
-            # Gráficos Principais (Distribuição e Unidades)
-            g1, g2 = st.columns(2)
-            with g1:
-                st.subheader("Distribuição por Tipo de Limpeza")
-                tipo_counts = df_filtrado["Tipo de Limpeza"].value_counts().reset_index()
-                tipo_counts.columns = ["Tipo de Limpeza", "Quantidade"]
-                fig_tipo = px.pie(
-                    tipo_counts,
-                    names="Tipo de Limpeza",
-                    values="Quantidade",
-                    title="Proporção de Limpezas",
-                    color_discrete_sequence=["#FF5733", "#3357FF"]
-                )
-                fig_tipo.update_layout(
-                    height=480,
-                    font=dict(size=14),
-                    legend=dict(font=dict(size=14)),
-                    title_font=dict(size=16)
-                )
-                st.plotly_chart(fig_tipo, use_container_width=True)
+        # Aplicando filtros
+        df_filtrado = df_limpeza.copy()
+        if unidade_filtro != "Todas":
+            df_filtrado = df_filtrado[df_filtrado["Unidade de Internação"] == unidade_filtro]
+        if tipo_filtro != "Todos":
+            df_filtrado = df_filtrado[df_filtrado["Tipo de Limpeza"] == tipo_filtro]
+        if turno_filtro != "Todos":
+            df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
 
-            with g2:
-                st.subheader("Limpezas por Unidade de Internação")
-                unidade_counts = df_filtrado["Unidade de Internação"].value_counts().reset_index()
-                unidade_counts.columns = ["Unidade", "Quantidade"]
-                fig_unidade = px.bar(
-                    unidade_counts,
-                    x="Unidade",
-                    y="Quantidade",
-                    text_auto=True,
-                    title="Volume por Unidade",
-                    color="Unidade",
-                    color_discrete_sequence=px.colors.qualitative.Bold
-                )
-                fig_unidade.update_layout(
-                    height=500,
-                    font=dict(size=13),
-                    xaxis=dict(showticklabels=False, title="Unidades de Internação"),
-                    yaxis=dict(tickfont=dict(size=13), title_font=dict(size=14)),
-                    title_font=dict(size=16),
-                    legend=dict(title=dict(text="<b>Unidades</b>"), font=dict(size=12), orientation="v"),
-                    showlegend=True
-                )
-                st.plotly_chart(fig_unidade, use_container_width=True)
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total de Limpezas Filtradas", len(df_filtrado))
+        m2.metric("Limpezas Terminais", len(df_filtrado[df_filtrado["Tipo de Limpeza"].str.contains("TERMINAL", case=False, na=False)]))
+        m3.metric("Limpezas Concorrentes", len(df_filtrado[df_filtrado["Tipo de Limpeza"].str.contains("CONCORRENTE", case=False, na=False)]))
 
-            # Gráfico de Picos por Horário corrigido para exibir todas as 24h sem saltos
-            st.markdown("---")
-            st.subheader("📈 Picos de Solicitações por Horário do Dia")
-            
-            def extrair_hora_inteira(hora_str):
-                if not hora_str or ":" not in str(hora_str):
-                    return None
-                return int(str(hora_str).split(":")[0])
+        st.markdown("---")
 
-            df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
-            
-            # Cria um dataframe completo de 0h até 23h para garantir que nenhuma hora salte
-            horas_completas = pd.DataFrame({"Hora_Num": range(24)})
-            
-            # Conta as ocorrências por hora numérica
-            contagem_horas = df_filtrado.groupby("Hora_Num").size().reset_index(name="Quantidade")
-            
-            # Faz o merge para preencher com 0 as horas que não tiveram limpezas
-            df_horas_final = pd.merge(horas_completas, contagem_horas, on="Hora_Num", how="left").fillna(0)
-            df_horas_final["Hora"] = df_horas_final["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
-
-            fig_hora = px.line(
-                df_horas_final,
-                x="Hora",
-                y="Quantidade",
-                markers=True,
-                title="Evolução do Volume de Limpezas ao Longo do Dia (00h às 23h)",
-                color_discrete_sequence=["#2980B9"]
+        # Gráficos Comparativos (Se houver 2 planilhas, os gráficos dividem-se por cor com base na 'Origem / Período')
+        g1, g2 = st.columns(2)
+        with g1:
+            st.subheader("Proporção por Tipo de Limpeza")
+            fig_tipo = px.pie(
+                df_filtrado,
+                names="Tipo de Limpeza",
+                values=df_filtrado.index.to_series().map(lambda x: 1), # Conta ocorrências
+                title="Distribuição Geral",
+                color_discrete_sequence=["#FF5733", "#3357FF"]
             )
-            fig_hora.update_traces(
-                mode="lines+markers+text",
-                text=df_horas_final["Quantidade"],
-                textposition="top center",
-                textfont=dict(size=12, color="#1B4F72", family="Arial Black"),
-                line=dict(width=3)
+            fig_tipo.update_layout(height=450, font=dict(size=13))
+            st.plotly_chart(fig_tipo, use_container_width=True)
+
+        with g2:
+            st.subheader("Volume por Unidade de Internação (Comparativo)")
+            # Gráfico de barras agrupadas por Unidade e colorido pela Origem/Planilha
+            fig_unidade = px.histogram(
+                df_filtrado,
+                x="Unidade de Internação",
+                color="Origem / Período",
+                barmode="group",
+                title="Comparativo de Volume entre Planilhas",
+                text_auto=True,
+                color_discrete_sequence=["#2980B9", "#E67E22"] # Cores distintas para Planilha 1 e Planilha 2
             )
-            fig_hora.update_layout(
-                height=450,
-                font=dict(size=13),
-                xaxis=dict(title="Hora do Dia", tickfont=dict(size=12)),
-                yaxis=dict(title="Número de Limpezas", tickfont=dict(size=12)),
-                title_font=dict(size=16),
-                showlegend=False
+            fig_unidade.update_layout(
+                height=480,
+                font=dict(size=12),
+                xaxis=dict(tickangle=-35, title="Unidades de Internação"),
+                yaxis=dict(title="Quantidade"),
+                legend=dict(title=dict(text="<b>Planilha</b>"))
             )
-            st.plotly_chart(fig_hora, use_container_width=True)
+            st.plotly_chart(fig_unidade, use_container_width=True)
 
-            st.markdown("---")
-            
-            # Botão de Download otimizado para o Excel (utf-8-sig)
-            col_d1, col_d2 = st.columns([3, 1])
-            with col_d1:
-                st.subheader("Tabela Detalhada de Limpezas (Segura)")
-            with col_d2:
-                csv_bytes = df_filtrado.drop(columns=["Hora_Num"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-                st.download_button(
-                    label="📥 Baixar CSV Corrigido",
-                    data=csv_bytes,
-                    file_name="relatorio_limpezas_hospitalares.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+        # Gráfico de Picos por Horário Comparativo (00h às 23h)
+        st.markdown("---")
+        st.subheader("📈 Comparativo de Picos por Horário do Dia")
+        
+        def extrair_hora_inteira(hora_str):
+            if not hora_str or ":" not in str(hora_str):
+                return None
+            return int(str(hora_str).split(":")[0])
 
-            st.dataframe(df_filtrado.drop(columns=["Hora_Num"], errors="ignore"), use_container_width=True, hide_index=True)
+        df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
+        
+        # Agrupa por Hora e por Origem/Período para comparar as linhas
+        df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"]).size().reset_index(name="Quantidade")
+        
+        # Garante que todas as 24 horas existam para ambas as origens
+        horas_base = []
+        origens = df_filtrado["Origem / Período"].unique()
+        for orig in origens:
+            for h in range(24):
+                horas_base.append({"Hora_Num": h, "Origem / Período": orig})
+        
+        df_base_24h = pd.DataFrame(horas_base)
+        df_horas_final = pd.merge(df_base_24h, df_horas_comp, on=["Hora_Num", "Origem / Período"], how="left").fillna(0)
+        df_horas_final["Hora"] = df_horas_final["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
+        df_horas_final = df_horas_final.sort_values(by=["Hora_Num"])
 
-    except Exception as e:
-        st.error(f"Erro ao processar o arquivo de limpeza: {e}")
+        fig_hora = px.line(
+            df_horas_final,
+            x="Hora",
+            y="Quantidade",
+            color="Origem / Período",
+            markers=True,
+            title="Evolução Temporal Comparativa (00h às 23h)",
+            color_discrete_sequence=["#2980B9", "#E67E22"]
+        )
+        fig_hora.update_layout(
+            height=450,
+            font=dict(size=13),
+            xaxis=dict(title="Hora do Dia"),
+            yaxis=dict(title="Número de Limpezas"),
+            legend=dict(title=dict(text="<b>Planilha</b>"))
+        )
+        st.plotly_chart(fig_hora, use_container_width=True)
+
+        st.markdown("---")
+        
+        # Tabela e Botão de Download
+        col_d1, col_d2 = st.columns([3, 1])
+        with col_d1:
+            st.subheader("Tabela Detalhada Consolidada (Segura)")
+        with col_d2:
+            csv_bytes = df_filtrado.drop(columns=["Hora_Num"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+            st.download_button(
+                label="📥 Baixar CSV Combinado",
+                data=csv_bytes,
+                file_name="relatorio_comparativo_limpezas.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
+        st.dataframe(df_filtrado.drop(columns=["Hora_Num"], errors="ignore"), use_container_width=True, hide_index=True)
+
 else:
-    st.info("👆 Por favor, faça o upload da planilha Excel para gerar os gráficos e análises operacionais.")
+    st.info("👆 Por favor, faça o upload de pelo menos uma planilha Excel acima para iniciar as análises.")
