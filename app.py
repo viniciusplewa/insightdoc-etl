@@ -86,7 +86,7 @@ def identificar_turno(hora_str):
         fim_diurno = 19 * 60     # 19:00
         
         if inicio_diurno <= total_minutos <= fim_diurno:
-            return "Diurno (07:00 - 19:00)"
+            return "Diurno"
         else:
             return "Noturno"
     except Exception:
