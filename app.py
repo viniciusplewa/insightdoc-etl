@@ -30,7 +30,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Função vetorizada ultra-rápida para mapear setores baseada nos leitos
+# Função vetorizada para mapear setores baseada nos leitos
 def identificar_setor_serie(leitos_series):
     leitos_upper = leitos_series.fillna("PA").astype(str).str.strip().str.upper()
     
@@ -60,11 +60,13 @@ def identificar_turno_serie(horas_series):
     horas_str = horas_series.fillna("").astype(str).str.strip()
     turnos = pd.Series("Não Especificado", index=horas_series.index)
     
-    valido = horas_str.str.contains(r'^\d{2}:\d{2}$', na=False)
+    # Extrai hora de formatos como "14:30" ou "14:30:00"
+    match_hora = horas_str.str.extract(r'^(\d{2}):(\d{2})', expand=True)
+    valido = match_hora[0].notna()
+    
     if valido.any():
-        partes = horas_str[valido].str.split(":", expand=True)
-        h_num = partes[0].astype(int)
-        m_num = partes[1].astype(int)
+        h_num = match_hora[0][valido].astype(int)
+        m_num = match_hora[1][valido].astype(int)
         total_min = h_num * 60 + m_num
         
         diurno = (total_min >= 420) & (total_min <= 1140) # 07:00 a 19:00
@@ -73,9 +75,8 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função universal para ler Excel ou CSV com alta performance
+# Função robusta para encontrar colunas pelo nome ou por varredura de conteúdo
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
-    # Identifica se é CSV ou Excel pelo nome do arquivo
     nome_arquivo = uploaded_file.name.lower()
     
     if nome_arquivo.endswith('.csv'):
@@ -87,30 +88,46 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     else:
         df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
     
-    # Filtra apenas linhas válidas onde a primeira coluna é um número de solicitação
-    col_zero = df_raw.iloc[:, 0].fillna("").astype(str).str.strip()
-    mask_Validas = col_zero.str.isdigit()
-    df_filtrado = df_raw[mask_Validas].copy()
+    # Padroniza nomes das colunas para maiúsculas sem espaços extras
+    df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
-    if df_filtrado.empty:
-        return pd.DataFrame()
+    # Tenta localizar colunas pelo nome padrão do sistema hospitalar
+    col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
+    col_hora = next((c for c in df_raw.columns if any(k in c for k in ["HORA", "DATA/HORA", "EMISSAO", "SOLIC"])), None)
+    col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
+    col_tipo = next((c for c in df_raw.columns if any(k in c for k in ["TIPO", "LIMPEZA"])), None)
+    col_func = next((c for c in df_raw.columns if any(k in c for k in ["FUNCIONARIO", "COLABORADOR", "RESPONSAVEL", "USUARIO", "EXECUTANTE"])), None)
 
-    solicitacao = df_filtrado.iloc[:, 0].astype(str).str.strip()
+    # Extração segura dos dados
+    solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
-    hora = pd.Series("", index=df_filtrado.index)
-    if df_filtrado.shape[1] > 23:
-        hora = df_filtrado.iloc[:, 23].fillna("").astype(str).str.strip()
-    
-    leito = pd.Series("PA", index=df_filtrado.index)
-    if df_filtrado.shape[1] > 25:
-        leito = df_filtrado.iloc[:, 25].fillna("PA").astype(str).str.strip()
+    # Hora: se não achou coluna com nome hora, varre as colunas procurando o formato "HH:MM"
+    hora = pd.Series("", index=df_raw.index)
+    if col_hora and col_hora in df_raw.columns:
+        hora = df_raw[col_hora].fillna("").astype(str).str.strip()
+    else:
+        for col in df_raw.columns:
+            amostra = df_raw[col].dropna().astype(str).str.strip()
+            if amostra.str.contains(r'^\d{2}:\d{2}', na=False).any():
+                hora = amostra
+                break
+
+    # Leito
+    leito = pd.Series("PA", index=df_raw.index)
+    if col_leito and col_leito in df_raw.columns:
+        leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
         leito = leito.replace("", "PA")
 
-    tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_filtrado.index)
-    
-    funcionario = pd.Series("", index=df_filtrado.index)
-    if df_filtrado.shape[1] > 36:
-        funcionario = df_filtrado.iloc[:, 36].fillna("").astype(str).str.strip()
+    # Tipo de Limpeza
+    tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_raw.index)
+    if col_tipo and col_tipo in df_raw.columns:
+        val_tipo = df_raw[col_tipo].fillna("").astype(str).str.upper()
+        tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
+
+    # Funcionário
+    funcionario = pd.Series("", index=df_raw.index)
+    if col_func and col_func in df_raw.columns:
+        funcionario = df_raw[col_func].fillna("").astype(str).str.strip()
 
     df_final = pd.DataFrame({
         "Origem / Período": nome_origem,
@@ -123,6 +140,9 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         "Unidade de Internação": identificar_setor_serie(leito),
     })
 
+    # Remove linhas vazias ou cabeçalhos repetidos
+    df_final = df_final[df_final["Solicitação"] != ""].copy()
+    
     return df_final
 
 # Main Title & Header
@@ -131,11 +151,10 @@ st.markdown("---")
 
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** (suporte para Excel e CSV de grande porte) "
+    "Faça o upload de **uma ou duas planilhas** (suporte inteligente para Excel e CSV de grande porte) "
     "para realizar análises isoladas ou uma **comparação lado a lado** com total segurança (LGPD Ativada)."
 )
 
-# Layout com duas colunas para upload independente (agora aceita CSV também)
 col_up1, col_up2 = st.columns(2)
 with col_up1:
     arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xlsx", "xls", "csv"], key="file1")
@@ -145,7 +164,7 @@ with col_up2:
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    with st.spinner("A processar a 1ª planilha em alta performance..."):
+    with st.spinner("A processar a 1ª planilha com detecção inteligente..."):
         try:
             df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
             if not df1.empty:
@@ -154,7 +173,7 @@ if arquivo_1 is not None:
             st.error(f"Erro ao processar a 1ª planilha: {e}")
 
 if arquivo_2 is not None:
-    with st.spinner("A processar a 2ª planilha em alta performance..."):
+    with st.spinner("A processar a 2ª planilha com detecção inteligente..."):
         try:
             df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
             if not df2.empty:
@@ -249,7 +268,10 @@ if len(dfs_combinados) > 0:
         def extrair_hora_inteira(hora_str):
             if not hora_str or ":" not in str(hora_str):
                 return None
-            return int(str(hora_str).split(":")[0])
+            try:
+                return int(str(hora_str).split(":")[0])
+            except Exception:
+                return None
 
         df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
         
