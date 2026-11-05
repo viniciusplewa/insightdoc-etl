@@ -72,7 +72,7 @@ def identificar_setor(leito):
     
     return "PA (Pronto Atendimento)"
 
-# Função ultra robusta e inteligente para processar o relatório Excel
+# Função para processar o relatório de forma segura (LGPD Compliance - Sem Atendimento / Pacientes)
 def processar_relatorio_limpeza(uploaded_file):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
@@ -83,9 +83,8 @@ def processar_relatorio_limpeza(uploaded_file):
             row_vals = [str(x).strip() for x in row.values if pd.notna(x) and str(x).strip() != "nan"]
             
             solicitacao = str(row.iloc[0]).strip()
-            atendimento = str(row.iloc[8]).strip() if len(row) > 8 and pd.notna(row.iloc[8]) else ""
             
-            # Hora (procura padrão HH:MM)
+            # Hora
             hora = ""
             for val in row_vals:
                 if re.match(r'^\d{2}:\d{2}$', val):
@@ -94,7 +93,7 @@ def processar_relatorio_limpeza(uploaded_file):
             if not hora and len(row.values) > 23 and pd.notna(row.iloc[23]):
                 hora = str(row.iloc[23]).strip()
 
-            # Leito (busca inteligente por padrões de leito ou quartos com ISO/OBES)
+            # Leito
             leito = ""
             for val in row_vals:
                 val_upper = val.upper()
@@ -104,9 +103,9 @@ def processar_relatorio_limpeza(uploaded_file):
             if not leito and len(row.values) > 25 and pd.notna(row.iloc[25]):
                 leito = str(row.iloc[25]).strip()
             if not leito:
-                leito = "PA" # Fallback seguro
+                leito = "PA"
 
-            # Tipo de Limpeza (Identifica Concorrente ou Terminal)
+            # Tipo de Limpeza
             tipo_limpeza = "TERMINAL DE LEITO"
             for val in row_vals:
                 val_upper = val.upper()
@@ -117,22 +116,22 @@ def processar_relatorio_limpeza(uploaded_file):
                     tipo_limpeza = "TERMINAL DE LEITO"
                     break
 
-            # Funcionário (busca na coluna 36 ou pelo nome formatado na linha)
+            # Funcionário
             funcionario = ""
             if len(row.values) > 36 and pd.notna(row.iloc[36]):
                 funcionario = str(row.iloc[36]).strip()
             else:
                 for val in reversed(row_vals):
                     val_upper = val.upper()
-                    if val_upper not in [tipo_limpeza.upper(), leito.upper(), hora, solicitacao, atendimento] and not val.isdigit() and len(val) > 3:
+                    if val_upper not in [tipo_limpeza.upper(), leito.upper(), hora, solicitacao] and not val.isdigit() and len(val) > 3:
                         funcionario = val
                         break
 
             setor_mapeado = identificar_setor(leito)
 
+            # Estrutura final limpa e protegida por LGPD (sem dados de atendimento/pacientes)
             registros.append({
                 "Solicitação": solicitacao,
-                "Atendimento": atendimento,
                 "Hora": hora,
                 "Leito": leito,
                 "Tipo de Limpeza": tipo_limpeza,
@@ -160,7 +159,7 @@ with tab1:
     st.header("Análise de Limpezas de Quartos (Terminais e Concorrentes)")
     st.markdown(
         "Faça o upload do relatório Excel **`R_HISTORICO_QUARTOS`** para analisar "
-        "os dados em tempo real com total segurança (dados de pacientes ocultados)."
+        "os dados em tempo real com total segurança (dados de pacientes e atendimentos ocultados)."
     )
 
     arquivo_limpeza = st.file_uploader(
@@ -176,7 +175,7 @@ with tab1:
                 st.warning("⚠️ Não foram encontrados registros estruturados na planilha enviada.")
             else:
                 st.success(f"Planilha processada com sucesso! Total de registros: {len(df_limpeza)}")
-                st.info("🔒 **LGPD Ativada:** Nomes de pacientes foram excluídos do processamento para garantir total sigilo.")
+                st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram excluídos do processamento para garantir total sigilo.")
 
                 col_f1, col_f2 = st.columns(2)
                 with col_f1:
