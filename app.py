@@ -39,7 +39,7 @@ def identificar_setor(leito):
     
     match = re.search(r'\d+', leito_str)
     if not match:
-        return "Outros / Não Especificado"
+        return "PA (Pronto Atendimento)"
     
     num = int(match.group())
     
@@ -70,47 +70,46 @@ def identificar_setor(leito):
     elif 501 <= num <= 520:
         return "Clínica cirúrgica 3 (5 andar)"
     
-    return "Outros / Não Especificado"
+    return "PA (Pronto Atendimento)"
 
-# Função ultra robusta para processar o relatório Excel
+# Função ultra robusta e inteligente para processar o relatório Excel
 def processar_relatorio_limpeza(uploaded_file):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
 
     for _, row in df_raw.iterrows():
         primeira_col = row.iloc[0]
-        # Identifica linhas válidas onde a primeira coluna é um número de solicitação
         if pd.notna(primeira_col) and str(primeira_col).strip().isdigit():
-            row_vals = [str(x) if pd.notna(x) else "" for x in row.values]
+            row_vals = [str(x).strip() for x in row.values if pd.notna(x) and str(x).strip() != "nan"]
             
             solicitacao = str(row.iloc[0]).strip()
-            
-            # Atendimento (coluna 8 ou busca por número grande)
             atendimento = str(row.iloc[8]).strip() if len(row) > 8 and pd.notna(row.iloc[8]) else ""
             
-            # Hora (procura padrão HH:MM na linha)
+            # Hora (procura padrão HH:MM)
             hora = ""
             for val in row_vals:
-                if re.match(r'^\d{2}:\d{2}$', str(val)):
-                    hora = str(val).strip()
+                if re.match(r'^\d{2}:\d{2}$', val):
+                    hora = val
                     break
-            if not hora and len(row_vals) > 23:
+            if not hora and len(row.values) > 23 and pd.notna(row.iloc[23]):
                 hora = str(row.iloc[23]).strip()
 
-            # Leito (procura termos ou códigos de leito)
+            # Leito (busca inteligente por padrões de leito ou quartos com ISO/OBES)
             leito = ""
             for val in row_vals:
-                val_upper = str(val).upper()
-                if any(p in val_upper for p in ["ESTAB", "OBS", "EXTRA", "UTI"]) or re.match(r'^\d{1,3}\s*[A-D]?$', val_upper):
-                    leito = str(val).strip()
+                val_upper = val.upper()
+                if any(p in val_upper for p in ["ESTAB", "OBS", "EXTRA", "ISO", "OBES", "MED", "EX"]) or re.match(r'^\d{3}\s*[A-D]?$', val_upper):
+                    leito = val
                     break
-            if not leito and len(row_vals) > 25:
+            if not leito and len(row.values) > 25 and pd.notna(row.iloc[25]):
                 leito = str(row.iloc[25]).strip()
+            if not leito:
+                leito = "PA" # Fallback seguro
 
-            # Tipo de Limpeza (Concorrente ou Terminal)
+            # Tipo de Limpeza (Identifica Concorrente ou Terminal)
             tipo_limpeza = "TERMINAL DE LEITO"
             for val in row_vals:
-                val_upper = str(val).upper()
+                val_upper = val.upper()
                 if "CONCORRENTE" in val_upper:
                     tipo_limpeza = "CONCORRENTE"
                     break
@@ -118,15 +117,15 @@ def processar_relatorio_limpeza(uploaded_file):
                     tipo_limpeza = "TERMINAL DE LEITO"
                     break
 
-            # Funcionário (procura nome válido na linha)
+            # Funcionário (busca na coluna 36 ou pelo nome formatado na linha)
             funcionario = ""
-            if len(row) > 36 and pd.notna(row.iloc[36]):
+            if len(row.values) > 36 and pd.notna(row.iloc[36]):
                 funcionario = str(row.iloc[36]).strip()
             else:
                 for val in reversed(row_vals):
-                    val_str = str(val).strip()
-                    if val_str and val_str not in [tipo_limpeza, leito, hora, solicitacao] and not val_str.isdigit() and len(val_str) > 3:
-                        funcionario = val_str
+                    val_upper = val.upper()
+                    if val_upper not in [tipo_limpeza.upper(), leito.upper(), hora, solicitacao, atendimento] and not val.isdigit() and len(val) > 3:
+                        funcionario = val
                         break
 
             setor_mapeado = identificar_setor(leito)
