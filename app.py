@@ -11,11 +11,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# Injeção de CSS Customizado para UI/UX moderna (Opção 4)
+# Injeção de CSS Customizado para UI/UX moderna
 st.markdown(
     """
     <style>
-    /* Estilização geral e cartões */
     .stMetric {
         background-color: #fdfefe;
         padding: 16px;
@@ -87,7 +86,7 @@ def identificar_turno(hora_str):
         fim_diurno = 19 * 60     # 19:00
         
         if inicio_diurno <= total_minutos <= fim_diurno:
-            return "Diurno (07:00 - 19:00)"
+            return "Diurno"
         else:
             return "Noturno"
     except Exception:
@@ -261,7 +260,7 @@ if arquivo_limpeza is not None:
                 )
                 st.plotly_chart(fig_unidade, use_container_width=True)
 
-            # Nova secção: Gráfico de Picos por Horário (Opção 3)
+            # Gráfico de Picos por Horário mais bonito e com números visíveis
             st.markdown("---")
             st.subheader("📈 Picos de Solicitações por Horário do Dia")
             
@@ -273,37 +272,43 @@ if arquivo_limpeza is not None:
             df_filtrado["Hora_Cheia"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
             hora_counts = df_filtrado["Hora_Cheia"].value_counts().reset_index()
             hora_counts.columns = ["Hora", "Quantidade"]
-            # Ordena por hora se possível
             hora_counts = hora_counts.sort_values(by="Hora")
 
-            fig_hora = px.line(
+            # Gráfico de área/linha elegante com os números exibidos em cima dos pontos (text="Quantidade")
+            fig_hora = px.area(
                 hora_counts,
                 x="Hora",
                 y="Quantidade",
-                markers=True,
                 title="Evolução do Volume de Limpezas ao Longo do Dia",
                 color_discrete_sequence=["#FF5733"]
             )
+            # Mostra os valores exatos em cada ponto e deixa a linha marcante
+            fig_hora.update_traces(mode="lines+markers+text", textposition="top center", textfont=dict(size=12, color="#333333"))
             fig_hora.update_layout(
-                height=400,
+                height=420,
                 font=dict(size=13),
                 xaxis=dict(title="Hora do Dia (Cheia)", tickfont=dict(size=12)),
                 yaxis=dict(title="Número de Limpezas", tickfont=dict(size=12)),
-                title_font=dict(size=16)
+                title_font=dict(size=16),
+                showlegend=False
             )
             st.plotly_chart(fig_hora, use_container_width=True)
 
             st.markdown("---")
-            st.subheader("Tabela Detalhada de Limpezas (Segura)")
             
-            # Botão de Exportação de Relatórios (Opção 1)
-            csv_bytes = df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore").to_csv(index=False).encode("utf-8")
-            st.download_button(
-                label="📥 Descarregar Relatório Filtrado (CSV)",
-                data=csv_bytes,
-                file_name="relatorio_limpezas_hospitalares.csv",
-                mime="text/csv"
-            )
+            # Botão de Download destacado antes da tabela
+            col_d1, col_d2 = st.columns([3, 1])
+            with col_d1:
+                st.subheader("Tabela Detalhada de Limpezas (Segura)")
+            with col_d2:
+                csv_bytes = df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore").to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="📥 Baixar CSV",
+                    data=csv_bytes,
+                    file_name="relatorio_limpezas_hospitalares.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
 
             st.dataframe(df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore"), use_container_width=True, hide_index=True)
 
