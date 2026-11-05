@@ -72,7 +72,28 @@ def identificar_setor(leito):
     
     return "PA (Pronto Atendimento)"
 
-# Função para processar o relatório de forma segura (LGPD Compliance - Sem Atendimento / Pacientes)
+# Função para classificar o turno com base na hora (07:00 às 19:00 = Diurno, restante = Noturno)
+def identificar_turno(hora_str):
+    if not hora_str or ":" not in str(hora_str):
+        return "Não Especificado"
+    try:
+        partes = str(hora_str).strip().split(":")
+        hora_num = int(partes[0])
+        minuto_num = int(partes[1])
+        
+        # Converte para minutos totais do dia para precisão exata
+        total_minutos = hora_num * 60 + minuto_num
+        inicio_diurno = 7 * 60   # 07:00
+        fim_diurno = 19 * 60     # 19:00
+        
+        if inicio_diurno <= total_minutos <= fim_diurno:
+            return "Diurno (07:00 - 19:00)"
+        else:
+            return "Noturno"
+    except Exception:
+        return "Não Especificado"
+
+# Função para processar o relatório de forma segura (LGPD Compliance)
 def processar_relatorio_limpeza(uploaded_file):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
@@ -128,11 +149,12 @@ def processar_relatorio_limpeza(uploaded_file):
                         break
 
             setor_mapeado = identificar_setor(leito)
+            turno_mapeado = identificar_turno(hora)
 
-            # Estrutura final limpa e protegida por LGPD (sem dados de atendimento/pacientes)
             registros.append({
                 "Solicitação": solicitacao,
                 "Hora": hora,
+                "Turno": turno_mapeado,
                 "Leito": leito,
                 "Tipo de Limpeza": tipo_limpeza,
                 "Funcionário": funcionario,
@@ -177,19 +199,26 @@ with tab1:
                 st.success(f"Planilha processada com sucesso! Total de registros: {len(df_limpeza)}")
                 st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram excluídos do processamento para garantir total sigilo.")
 
-                col_f1, col_f2 = st.columns(2)
+                # Filtros adicionando o Turno
+                col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
                     unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
                     unidade_filtro = st.selectbox("Filtrar por Unidade de Internação", unidades_disponiveis)
                 with col_f2:
                     tipos_disponiveis = ["Todos"] + list(df_limpeza["Tipo de Limpeza"].unique())
                     tipo_filtro = st.selectbox("Filtrar por Tipo de Limpeza", tipos_disponiveis)
+                with col_f3:
+                    turnos_disponiveis = ["Todos"] + list(df_limpeza["Turno"].unique())
+                    turno_filtro = st.selectbox("Filtrar por Turno", turnos_disponiveis)
 
+                # Aplicando filtros
                 df_filtrado = df_limpeza.copy()
                 if unidade_filtro != "Todas":
                     df_filtrado = df_filtrado[df_filtrado["Unidade de Internação"] == unidade_filtro]
                 if tipo_filtro != "Todos":
                     df_filtrado = df_filtrado[df_filtrado["Tipo de Limpeza"] == tipo_filtro]
+                if turno_filtro != "Todos":
+                    df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
 
                 m1, m2, m3 = st.columns(3)
                 m1.metric("Total de Limpezas Filtradas", len(df_filtrado))
