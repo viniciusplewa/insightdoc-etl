@@ -60,7 +60,6 @@ def identificar_turno_serie(horas_series):
     horas_str = horas_series.fillna("").astype(str).str.strip()
     turnos = pd.Series("Não Especificado", index=horas_series.index)
     
-    # Procura padrão HH:MM em qualquer parte da string da hora
     match_hora = horas_str.str.extract(r'(\d{2}):(\d{2})', expand=True)
     valido = match_hora[0].notna()
     
@@ -75,7 +74,7 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função robusta de processamento
+# Função robusta de processamento com blindagem LGPD
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
     nome_arquivo = uploaded_file.name.lower()
     
@@ -90,21 +89,23 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
-    # Localiza colunas por nome ou índice seguro
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
     col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
     col_tipo = next((c for c in df_raw.columns if any(k in c for k in ["TIPO", "LIMPEZA"])), None)
-    col_func = next((c for c in df_raw.columns if any(k in c for k in ["FUNCIONARIO", "COLABORADOR", "RESPONSAVEL", "USUARIO", "EXECUTANTE"])), None)
 
     solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
-    # Varredura inteligente para encontrar a coluna correta de Hora que contenha "HH:MM"
+    # Varredura inteligente aprimorada para extrair a hora em formato HH:MM de qualquer coluna de data/hora
     hora = pd.Series("", index=df_raw.index)
     for col in df_raw.columns:
+        if any(k in col for k in ["PACIENTE", "NOME", "FUNCIONARIO", "COLABORADOR"]):
+            continue # Evita procurar em colunas de nomes de pessoas
         amostra = df_raw[col].fillna("").astype(str).str.strip()
         if amostra.str.contains(r'\d{2}:\d{2}', na=False).any():
-            hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
-            break
+            extraido = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
+            if (extraido != "").any():
+                hora = extraido
+                break
 
     # Leito
     leito = pd.Series("PA", index=df_raw.index)
@@ -112,7 +113,6 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
         leito = leito.replace("", "PA")
     else:
-        # Tenta achar leito nas colunas por conteúdo
         for col in df_raw.columns:
             amostra = df_raw[col].fillna("").astype(str).str.upper()
             if amostra.str.contains("ESTAB|OBS|EXTRA|ISO|OBES|MED", na=False).any():
@@ -132,17 +132,8 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
                 break
 
-    # Funcionário
-    funcionario = pd.Series("Não Informado", index=df_raw.index)
-    if col_func and col_func in df_raw.columns:
-        funcionario = df_raw[col_func].fillna("Não Informado").astype(str).str.strip()
-    else:
-        for col in df_raw.columns:
-            amostra = df_raw[col].fillna("").astype(str).str.strip()
-            # Procura coluna de texto longo que pareça nome de pessoa
-            if amostra.str.len().mean() > 8 and not amostra.str.isdigit().all():
-                funcionario = amostra
-                break
+    # LGPD Compliance: Oculta totalmente qualquer dado de paciente ou funcionário
+    funcionario_protegido = pd.Series("🔒 [LGPD Ocultado]", index=df_raw.index)
 
     df_final = pd.DataFrame({
         "Origem / Período": nome_origem,
@@ -151,7 +142,7 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         "Turno": identificar_turno_serie(hora),
         "Leito": leito,
         "Tipo de Limpeza": tipo_limpeza,
-        "Funcionário": funcionario,
+        "Funcionário / Paciente": funcionario_protegido,
         "Unidade de Internação": identificar_setor_serie(leito),
     })
 
@@ -201,9 +192,9 @@ if len(dfs_combinados) > 0:
         st.warning("⚠️ Não foram encontrados registros estruturados nas planilhas enviadas.")
     else:
         st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza):,}".replace(",", "."))
-        st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram ocultados.")
+        st.info("🔒 **LGPD Ativada:** Nomes de pacientes e dados confidenciais foram totalmente ocultados.")
 
-        # Filtros Globais (incluindo Turno corrigido)
+        # Filtros Globais
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
             unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
@@ -253,10 +244,8 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 2. GRÁFICO DE BARRAS (Ordenado em ordem decrescente e colorido corretamente)
+        # 2. GRÁFICO DE BARRAS
         st.subheader("Volume por Unidade de Internação (Comparativo)")
-        
-        # Agrupa para ordenar as unidades do maior para o menor volume total
         ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
 
         fig_unidade = px.histogram(
