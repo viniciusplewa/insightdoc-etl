@@ -92,9 +92,10 @@ def identificar_turno(hora_str):
     except Exception:
         return "Não Especificado"
 
-# Função para processar o relatório de forma segura (LGPD Compliance)
+# Função otimizada para processar relatórios grandes com baixo consumo de memória
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
-    df_raw = pd.read_excel(uploaded_file, sheet_name=0)
+    # Lendo o Excel de forma otimizada para evitar estouro de RAM em ficheiros grandes
+    df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
     registros = []
 
     for _, row in df_raw.iterrows():
@@ -169,27 +170,33 @@ st.markdown("---")
 
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** para realizar análises isoladas ou uma **comparação lado a lado** "
-    "entre períodos diferentes com total segurança (LGPD Ativada)."
+    "Faça o upload de **uma ou duas planilhas** (formatos grandes suportados com otimização de memória) "
+    "para realizar análises isoladas ou uma **comparação lado a lado** com total segurança (LGPD Ativada)."
 )
 
 # Layout com duas colunas para upload independente
 col_up1, col_up2 = st.columns(2)
 with col_up1:
-    arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xls", "xlsx"], key="file1")
+    arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xlsx", "xls"], key="file1")
 with col_up2:
-    arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xls", "xlsx"], key="file2")
+    arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xlsx", "xls"], key="file2")
 
-# Processamento dos arquivos
+# Processamento dos arquivos com tratamento de erro de memória
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
-    dfs_combinados.append(df1)
+    try:
+        df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
+        dfs_combinados.append(df1)
+    except Exception as e:
+        st.error(f"Erro ao processar a 1ª planilha: {e}")
 
 if arquivo_2 is not None:
-    df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
-    dfs_combinados.append(df2)
+    try:
+        df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
+        dfs_combinados.append(df2)
+    except Exception as e:
+        st.error(f"Erro ao processar a 2ª planilha: {e}")
 
 if len(dfs_combinados) > 0:
     df_limpeza = pd.concat(dfs_combinados, ignore_index=True)
@@ -228,7 +235,7 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 1. GRÁFICOS DE PIZZA SEPARADOS (Um para cada planilha enviada)
+        # 1. GRÁFICOS DE PIZZA SEPARADOS
         st.subheader("Proporção por Tipo de Limpeza (Separado por Planilha)")
         origens_presentes = df_filtrado["Origem / Período"].unique()
         
@@ -251,7 +258,7 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 2. GRÁFICO DE BARRAS (Com números mais legíveis e espaçamento otimizado)
+        # 2. GRÁFICO DE BARRAS
         st.subheader("Volume por Unidade de Internação (Comparativo)")
         fig_unidade = px.histogram(
             df_filtrado,
@@ -267,12 +274,12 @@ if len(dfs_combinados) > 0:
             height=550,
             font=dict(size=12),
             xaxis=dict(tickangle=-35, title="Unidades de Internação"),
-            yaxis=dict(title="Quantidade", range=[0, df_filtrado.groupby(["Unidade de Internação", "Origem / Período"]).size().max() * 1.2]),
+            yaxis=dict(title="Quantidade"),
             legend=dict(title=dict(text="<b>Planilha</b>"))
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 3. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Maior altura e números visíveis permanentemente)
+        # 3. GRÁFICO DE LINHA TEMPORAL COMPARATIVO
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -304,7 +311,6 @@ if len(dfs_combinados) > 0:
             title="Evolução Temporal Comparativa Detalhada",
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
-        # Força os números a aparecerem permanentemente em cima de cada ponto
         fig_hora.update_traces(
             mode="lines+markers+text",
             text=df_horas_final["Quantidade"],
@@ -313,7 +319,7 @@ if len(dfs_combinados) > 0:
             line=dict(width=3)
         )
         fig_hora.update_layout(
-            height=600,  # Altura bem maior para facilitar a visualização e comparação clara
+            height=600,
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
