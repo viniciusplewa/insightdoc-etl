@@ -34,10 +34,7 @@ st.markdown(
 def identificar_setor_serie(leitos_series):
     leitos_upper = leitos_series.fillna("PA").astype(str).str.strip().str.upper()
     
-    # Condição padrão
     setores = pd.Series("PA (Pronto Atendimento)", index=leitos_series.index)
-    
-    # Extrai números dos leitos de forma vetorizada
     num_leitos = leitos_upper.str.extract(r'(\d+)', expand=False).astype(float)
     
     setores[leitos_upper.str.contains("OBS M|OBS F|EXTRA|ESTAB|MED|EX", na=False)] = "PA (Pronto Atendimento)"
@@ -76,10 +73,19 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função de processamento de alta performance para arquivos grandes
+# Função universal para ler Excel ou CSV com alta performance
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
-    # Lê o Excel ignorando formatações pesadas
-    df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
+    # Identifica se é CSV ou Excel pelo nome do arquivo
+    nome_arquivo = uploaded_file.name.lower()
+    
+    if nome_arquivo.endswith('.csv'):
+        try:
+            df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python', dtype=str)
+        except Exception:
+            uploaded_file.seek(0)
+            df_raw = pd.read_csv(uploaded_file, encoding='latin1', sep=None, engine='python', dtype=str)
+    else:
+        df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
     
     # Filtra apenas linhas válidas onde a primeira coluna é um número de solicitação
     col_zero = df_raw.iloc[:, 0].fillna("").astype(str).str.strip()
@@ -89,29 +95,23 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     if df_filtrado.empty:
         return pd.DataFrame()
 
-    # Extração de colunas de forma segura e rápida
     solicitacao = df_filtrado.iloc[:, 0].astype(str).str.strip()
     
-    # Procura hora (coluna 23 se existir ou busca padrão)
     hora = pd.Series("", index=df_filtrado.index)
     if df_filtrado.shape[1] > 23:
         hora = df_filtrado.iloc[:, 23].fillna("").astype(str).str.strip()
     
-    # Procura leito (coluna 25 se existir)
     leito = pd.Series("PA", index=df_filtrado.index)
     if df_filtrado.shape[1] > 25:
         leito = df_filtrado.iloc[:, 25].fillna("PA").astype(str).str.strip()
         leito = leito.replace("", "PA")
 
-    # Tipo de limpeza padrão
     tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_filtrado.index)
     
-    # Funcionário (coluna 36 se existir)
     funcionario = pd.Series("", index=df_filtrado.index)
     if df_filtrado.shape[1] > 36:
         funcionario = df_filtrado.iloc[:, 36].fillna("").astype(str).str.strip()
 
-    # Monta o DataFrame final vetorizado (instantâneo)
     df_final = pd.DataFrame({
         "Origem / Período": nome_origem,
         "Solicitação": solicitacao,
@@ -131,22 +131,21 @@ st.markdown("---")
 
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** (suporte de alta performance para arquivos pesados) "
+    "Faça o upload de **uma ou duas planilhas** (suporte para Excel e CSV de grande porte) "
     "para realizar análises isoladas ou uma **comparação lado a lado** com total segurança (LGPD Ativada)."
 )
 
-# Layout com duas colunas para upload independente
+# Layout com duas colunas para upload independente (agora aceita CSV também)
 col_up1, col_up2 = st.columns(2)
 with col_up1:
-    arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xlsx", "xls"], key="file1")
+    arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xlsx", "xls", "csv"], key="file1")
 with col_up2:
-    arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xlsx", "xls"], key="file2")
+    arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xlsx", "xls", "csv"], key="file2")
 
-# Processamento dos arquivos
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    with st.spinner("A processar a 1ª planilha (alta performance)..."):
+    with st.spinner("A processar a 1ª planilha em alta performance..."):
         try:
             df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
             if not df1.empty:
@@ -155,7 +154,7 @@ if arquivo_1 is not None:
             st.error(f"Erro ao processar a 1ª planilha: {e}")
 
 if arquivo_2 is not None:
-    with st.spinner("A processar a 2ª planilha (alta performance)..."):
+    with st.spinner("A processar a 2ª planilha em alta performance..."):
         try:
             df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
             if not df2.empty:
@@ -184,7 +183,6 @@ if len(dfs_combinados) > 0:
             turnos_disponiveis = ["Todos"] + list(df_limpeza["Turno"].unique())
             turno_filtro = st.selectbox("Filtrar por Turno", turnos_disponiveis)
 
-        # Aplicando filtros
         df_filtrado = df_limpeza.copy()
         if unidade_filtro != "Todas":
             df_filtrado = df_filtrado[df_filtrado["Unidade de Internação"] == unidade_filtro]
@@ -311,4 +309,4 @@ if len(dfs_combinados) > 0:
         st.dataframe(df_filtrado.drop(columns=["Hora_Num"], errors="ignore"), use_container_width=True, hide_index=True)
 
 else:
-    st.info("👆 Por favor, faça o upload de pelo menos uma planilha Excel acima para iniciar as análises.")
+    st.info("👆 Por favor, faça o upload de pelo menos uma planilha (Excel ou CSV) acima para iniciar as análises.")
