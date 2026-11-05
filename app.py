@@ -226,7 +226,7 @@ with tab1:
 
                 st.markdown("---")
 
-                # Gráficos maiores e com legendas/fontes ampliadas
+                # Gráficos maiores e com a legenda lateral ativada
                 g1, g2 = st.columns(2)
                 with g1:
                     st.subheader("Distribuição por Tipo de Limpeza")
@@ -239,7 +239,6 @@ with tab1:
                         title="Proporção de Limpezas",
                         color_discrete_sequence=["#FF5733", "#3357FF"]
                     )
-                    # Aumentando o tamanho do gráfico e da fonte da legenda
                     fig_tipo.update_layout(
                         height=480,
                         font=dict(size=14),
@@ -261,14 +260,15 @@ with tab1:
                         color="Unidade",
                         color_discrete_sequence=px.colors.qualitative.Bold
                     )
-                    # Aumentando o tamanho do gráfico e das fontes dos eixos
+                    # Legenda lateral ativada e dimensionada adequadamente
                     fig_unidade.update_layout(
-                        height=480,
+                        height=500,
                         font=dict(size=13),
-                        xaxis=dict(tickfont=dict(size=12), title_font=dict(size=14)),
+                        xaxis=dict(showticklabels=False, title="Unidades de Internação"), # Oculta os nomes longos no eixo X para dar lugar à legenda lateral limpa
                         yaxis=dict(tickfont=dict(size=13), title_font=dict(size=14)),
                         title_font=dict(size=16),
-                        showlegend=False
+                        legend=dict(title=dict(text="<b>Unidades</b>"), font=dict(size=12), orientation="v"),
+                        showlegend=True
                     )
                     st.plotly_chart(fig_unidade, use_container_width=True)
 
