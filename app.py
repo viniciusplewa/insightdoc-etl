@@ -226,9 +226,7 @@ with tab1:
 
                 st.markdown("---")
 
-                # Paleta de cores vibrantes e chamativas (Laranja neon/coral, Azul elétrico, Verde vibrante, Roxo)
-                cores_vibrantes = ["#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3", "#33FFF6", "#FFA533"]
-
+                # Gráficos maiores e com legendas/fontes ampliadas
                 g1, g2 = st.columns(2)
                 with g1:
                     st.subheader("Distribuição por Tipo de Limpeza")
@@ -239,7 +237,14 @@ with tab1:
                         names="Tipo de Limpeza",
                         values="Quantidade",
                         title="Proporção de Limpezas",
-                        color_discrete_sequence=["#FF5733", "#3357FF"] # Cores chamativas específicas para o tipo de limpeza
+                        color_discrete_sequence=["#FF5733", "#3357FF"]
+                    )
+                    # Aumentando o tamanho do gráfico e da fonte da legenda
+                    fig_tipo.update_layout(
+                        height=480,
+                        font=dict(size=14),
+                        legend=dict(font=dict(size=14)),
+                        title_font=dict(size=16)
                     )
                     st.plotly_chart(fig_tipo, use_container_width=True)
 
@@ -254,7 +259,16 @@ with tab1:
                         text_auto=True,
                         title="Volume por Unidade",
                         color="Unidade",
-                        color_discrete_sequence=px.colors.qualitative.Bold # Paleta de cores forte e chamativa do Plotly
+                        color_discrete_sequence=px.colors.qualitative.Bold
+                    )
+                    # Aumentando o tamanho do gráfico e das fontes dos eixos
+                    fig_unidade.update_layout(
+                        height=480,
+                        font=dict(size=13),
+                        xaxis=dict(tickfont=dict(size=12), title_font=dict(size=14)),
+                        yaxis=dict(tickfont=dict(size=13), title_font=dict(size=14)),
+                        title_font=dict(size=16),
+                        showlegend=False
                     )
                     st.plotly_chart(fig_unidade, use_container_width=True)
 
@@ -287,12 +301,14 @@ with tab2:
             st.subheader("Total Costs by Department")
             cost_by_dept = df.groupby("department")["estimated_cost"].sum().reset_index()
             fig_cost = px.bar(cost_by_dept, x="department", y="estimated_cost", color="department", text_auto=".2s", title="Total Operational Spend per Department ($)")
+            fig_cost.update_layout(height=450, font=dict(size=13))
             st.plotly_chart(fig_cost, use_container_width=True)
         with c2:
             st.subheader("Service Orders by Priority Level")
             priority_counts = df["priority"].value_counts().reset_index()
             priority_counts.columns = ["priority", "count"]
             fig_pie = px.pie(priority_counts, names="priority", values="count", color="priority", title="Tickets Distribution by Priority")
+            fig_pie.update_layout(height=450, font=dict(size=13))
             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.subheader("Detailed Transformed Data Table")
