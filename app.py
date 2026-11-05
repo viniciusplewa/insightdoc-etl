@@ -30,16 +30,17 @@ def load_data():
     conn.close()
     return df
 
-# Função de Mapeamento Inteligente de Setores (Sem "Outros")
+# Função de Mapeamento Inteligente de Setores baseada nos Leitos
 def identificar_setor(leito):
     leito_str = str(leito).strip().upper()
     
-    if any(prefix in leito_str for prefix in ["OBS M", "OBS F", "EXTRA", "ESTAB", "MED"]):
+    # Identificação do PA por prefixo ou termos específicos
+    if any(p in leito_str for p in ["OBS M", "OBS F", "EXTRA", "ESTAB", "MED", "EX"]):
         return "PA (Pronto Atendimento)"
     
     match = re.search(r'\d+', leito_str)
     if not match:
-        return "PA (Pronto Atendimento)"
+        return "Outros / Não Especificado"
     
     num = int(match.group())
     
@@ -70,9 +71,9 @@ def identificar_setor(leito):
     elif 501 <= num <= 520:
         return "Clínica cirúrgica 3 (5 andar)"
     
-    return "PA (Pronto Atendimento)"
+    return "Outros / Não Especificado"
 
-# Função para processar o relatório (.xlsx/.xls)
+# Função para processar o relatório (.xlsx) com os índices de colunas reais e exatos
 def processar_relatorio_limpeza(uploaded_file):
     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
     registros = []
@@ -82,7 +83,6 @@ def processar_relatorio_limpeza(uploaded_file):
         if pd.notna(primeira_col) and str(primeira_col).strip().isdigit():
             solicitacao = str(row.iloc[0]).strip()
             atendimento = str(row.iloc[8]).strip() if len(row) > 8 and pd.notna(row.iloc[8]) else ""
-            
             hora = str(row.iloc[23]).strip() if len(row) > 23 and pd.notna(row.iloc[23]) else ""
             leito = str(row.iloc[25]).strip() if len(row) > 25 and pd.notna(row.iloc[25]) else ""
             tipo_limpeza = str(row.iloc[29]).strip() if len(row) > 29 and pd.notna(row.iloc[29]) else "TERMINAL DE LEITO"
@@ -175,7 +175,6 @@ with tab1:
                     st.plotly_chart(fig_unidade, use_container_width=True)
 
                 st.subheader("Tabela Detalhada de Limpezas (Segura)")
-                # Substituído st.dataframe por st.markdown/st.write estático para eliminar o erro de fetch dinâmico do Streamlit
                 st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
 
         except Exception as e:
