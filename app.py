@@ -11,6 +11,26 @@ st.set_page_config(
     layout="wide",
 )
 
+# Injeção de CSS Customizado para UI/UX moderna (Opção 4)
+st.markdown(
+    """
+    <style>
+    /* Estilização geral e cartões */
+    .stMetric {
+        background-color: #fdfefe;
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e1e4e8;
+    }
+    h1, h2, h3 {
+        font-family: 'Inter', sans-serif;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Função de Mapeamento Inteligente de Setores baseada nos Leitos
 def identificar_setor(leito):
     leito_str = str(leito).strip().upper()
@@ -67,7 +87,7 @@ def identificar_turno(hora_str):
         fim_diurno = 19 * 60     # 19:00
         
         if inicio_diurno <= total_minutos <= fim_diurno:
-            return "Diurno"
+            return "Diurno (07:00 - 19:00)"
         else:
             return "Noturno"
     except Exception:
@@ -196,7 +216,7 @@ if arquivo_limpeza is not None:
 
             st.markdown("---")
 
-            # Gráficos
+            # Gráficos Principais (Distribuição e Unidades)
             g1, g2 = st.columns(2)
             with g1:
                 st.subheader("Distribuição por Tipo de Limpeza")
@@ -241,8 +261,51 @@ if arquivo_limpeza is not None:
                 )
                 st.plotly_chart(fig_unidade, use_container_width=True)
 
+            # Nova secção: Gráfico de Picos por Horário (Opção 3)
+            st.markdown("---")
+            st.subheader("📈 Picos de Solicitações por Horário do Dia")
+            
+            def extrair_hora_inteira(hora_str):
+                if not hora_str or ":" not in str(hora_str):
+                    return "Desconhecido"
+                return str(hora_str).split(":")[0] + "h"
+
+            df_filtrado["Hora_Cheia"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
+            hora_counts = df_filtrado["Hora_Cheia"].value_counts().reset_index()
+            hora_counts.columns = ["Hora", "Quantidade"]
+            # Ordena por hora se possível
+            hora_counts = hora_counts.sort_values(by="Hora")
+
+            fig_hora = px.line(
+                hora_counts,
+                x="Hora",
+                y="Quantidade",
+                markers=True,
+                title="Evolução do Volume de Limpezas ao Longo do Dia",
+                color_discrete_sequence=["#FF5733"]
+            )
+            fig_hora.update_layout(
+                height=400,
+                font=dict(size=13),
+                xaxis=dict(title="Hora do Dia (Cheia)", tickfont=dict(size=12)),
+                yaxis=dict(title="Número de Limpezas", tickfont=dict(size=12)),
+                title_font=dict(size=16)
+            )
+            st.plotly_chart(fig_hora, use_container_width=True)
+
+            st.markdown("---")
             st.subheader("Tabela Detalhada de Limpezas (Segura)")
-            st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
+            
+            # Botão de Exportação de Relatórios (Opção 1)
+            csv_bytes = df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore").to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="📥 Descarregar Relatório Filtrado (CSV)",
+                data=csv_bytes,
+                file_name="relatorio_limpezas_hospitalares.csv",
+                mime="text/csv"
+            )
+
+            st.dataframe(df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore"), use_container_width=True, hide_index=True)
 
     except Exception as e:
         st.error(f"Erro ao processar o arquivo de limpeza: {e}")
