@@ -260,34 +260,40 @@ if arquivo_limpeza is not None:
                 )
                 st.plotly_chart(fig_unidade, use_container_width=True)
 
-            # Gráfico de Picos por Horário limpo, elegante e com números fixos visíveis
+            # Gráfico de Picos por Horário corrigido para exibir todas as 24h sem saltos
             st.markdown("---")
             st.subheader("📈 Picos de Solicitações por Horário do Dia")
             
             def extrair_hora_inteira(hora_str):
                 if not hora_str or ":" not in str(hora_str):
-                    return "Desconhecido"
-                return str(hora_str).split(":")[0] + "h"
+                    return None
+                return int(str(hora_str).split(":")[0])
 
-            df_filtrado["Hora_Cheia"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
-            hora_counts = df_filtrado["Hora_Cheia"].value_counts().reset_index()
-            hora_counts.columns = ["Hora", "Quantidade"]
-            hora_counts = hora_counts.sort_values(by="Hora")
+            df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
+            
+            # Cria um dataframe completo de 0h até 23h para garantir que nenhuma hora salte
+            horas_completas = pd.DataFrame({"Hora_Num": range(24)})
+            
+            # Conta as ocorrências por hora numérica
+            contagem_horas = df_filtrado.groupby("Hora_Num").size().reset_index(name="Quantidade")
+            
+            # Faz o merge para preencher com 0 as horas que não tiveram limpezas
+            df_horas_final = pd.merge(horas_completas, contagem_horas, on="Hora_Num", how="left").fillna(0)
+            df_horas_final["Hora"] = df_horas_final["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
 
             fig_hora = px.line(
-                hora_counts,
+                df_horas_final,
                 x="Hora",
                 y="Quantidade",
                 markers=True,
-                title="Evolução do Volume de Limpezas ao Longo do Dia",
-                color_discrete_sequence=["#2980B9"] # Azul profissional elegante
+                title="Evolução do Volume de Limpezas ao Longo do Dia (00h às 23h)",
+                color_discrete_sequence=["#2980B9"]
             )
-            # Torna os números visíveis permanentemente em cima dos pontos e destaca os marcadores
             fig_hora.update_traces(
                 mode="lines+markers+text",
-                text=hora_counts["Quantidade"],
+                text=df_horas_final["Quantidade"],
                 textposition="top center",
-                textfont=dict(size=13, color="#1B4F72", family="Arial Black"),
+                textfont=dict(size=12, color="#1B4F72", family="Arial Black"),
                 line=dict(width=3)
             )
             fig_hora.update_layout(
@@ -302,13 +308,12 @@ if arquivo_limpeza is not None:
 
             st.markdown("---")
             
-            # Botão de Download com codificação corrigida para o Excel abrir com acentos perfeitos
+            # Botão de Download otimizado para o Excel (utf-8-sig)
             col_d1, col_d2 = st.columns([3, 1])
             with col_d1:
                 st.subheader("Tabela Detalhada de Limpezas (Segura)")
             with col_d2:
-                # utf-8-sig resolve o problema de acentuação corrompida (ex: Solicitação / Funcionário) no Excel do Windows
-                csv_bytes = df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+                csv_bytes = df_filtrado.drop(columns=["Hora_Num"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
                 st.download_button(
                     label="📥 Baixar CSV Corrigido",
                     data=csv_bytes,
@@ -317,7 +322,7 @@ if arquivo_limpeza is not None:
                     use_container_width=True
                 )
 
-            st.dataframe(df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore"), use_container_width=True, hide_index=True)
+            st.dataframe(df_filtrado.drop(columns=["Hora_Num"], errors="ignore"), use_container_width=True, hide_index=True)
 
     except Exception as e:
         st.error(f"Erro ao processar o arquivo de limpeza: {e}")
