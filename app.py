@@ -60,8 +60,8 @@ def identificar_turno_serie(horas_series):
     horas_str = horas_series.fillna("").astype(str).str.strip()
     turnos = pd.Series("Não Especificado", index=horas_series.index)
     
-    # Extrai hora de formatos como "14:30" ou "14:30:00"
-    match_hora = horas_str.str.extract(r'^(\d{2}):(\d{2})', expand=True)
+    # Procura padrão HH:MM em qualquer parte da string da hora
+    match_hora = horas_str.str.extract(r'(\d{2}):(\d{2})', expand=True)
     valido = match_hora[0].notna()
     
     if valido.any():
@@ -75,7 +75,7 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função robusta para encontrar colunas pelo nome ou por varredura de conteúdo
+# Função robusta de processamento
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
     nome_arquivo = uploaded_file.name.lower()
     
@@ -88,46 +88,61 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     else:
         df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
     
-    # Padroniza nomes das colunas para maiúsculas sem espaços extras
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
-    # Tenta localizar colunas pelo nome padrão do sistema hospitalar
+    # Localiza colunas por nome ou índice seguro
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
-    col_hora = next((c for c in df_raw.columns if any(k in c for k in ["HORA", "DATA/HORA", "EMISSAO", "SOLIC"])), None)
     col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
     col_tipo = next((c for c in df_raw.columns if any(k in c for k in ["TIPO", "LIMPEZA"])), None)
     col_func = next((c for c in df_raw.columns if any(k in c for k in ["FUNCIONARIO", "COLABORADOR", "RESPONSAVEL", "USUARIO", "EXECUTANTE"])), None)
 
-    # Extração segura dos dados
     solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
-    # Hora: se não achou coluna com nome hora, varre as colunas procurando o formato "HH:MM"
+    # Varredura inteligente para encontrar a coluna correta de Hora que contenha "HH:MM"
     hora = pd.Series("", index=df_raw.index)
-    if col_hora and col_hora in df_raw.columns:
-        hora = df_raw[col_hora].fillna("").astype(str).str.strip()
-    else:
-        for col in df_raw.columns:
-            amostra = df_raw[col].dropna().astype(str).str.strip()
-            if amostra.str.contains(r'^\d{2}:\d{2}', na=False).any():
-                hora = amostra
-                break
+    for col in df_raw.columns:
+        amostra = df_raw[col].fillna("").astype(str).str.strip()
+        if amostra.str.contains(r'\d{2}:\d{2}', na=False).any():
+            hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
+            break
 
     # Leito
     leito = pd.Series("PA", index=df_raw.index)
     if col_leito and col_leito in df_raw.columns:
         leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
         leito = leito.replace("", "PA")
+    else:
+        # Tenta achar leito nas colunas por conteúdo
+        for col in df_raw.columns:
+            amostra = df_raw[col].fillna("").astype(str).str.upper()
+            if amostra.str.contains("ESTAB|OBS|EXTRA|ISO|OBES|MED", na=False).any():
+                leito = df_raw[col].fillna("PA").astype(str).str.strip()
+                break
 
     # Tipo de Limpeza
     tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_raw.index)
     if col_tipo and col_tipo in df_raw.columns:
         val_tipo = df_raw[col_tipo].fillna("").astype(str).str.upper()
         tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
+    else:
+        for col in df_raw.columns:
+            amostra = df_raw[col].fillna("").astype(str).str.upper()
+            if amostra.str.contains("CONCORRENTE|TERMINAL", na=False).any():
+                val_tipo = df_raw[col].fillna("").astype(str).str.upper()
+                tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
+                break
 
     # Funcionário
-    funcionario = pd.Series("", index=df_raw.index)
+    funcionario = pd.Series("Não Informado", index=df_raw.index)
     if col_func and col_func in df_raw.columns:
-        funcionario = df_raw[col_func].fillna("").astype(str).str.strip()
+        funcionario = df_raw[col_func].fillna("Não Informado").astype(str).str.strip()
+    else:
+        for col in df_raw.columns:
+            amostra = df_raw[col].fillna("").astype(str).str.strip()
+            # Procura coluna de texto longo que pareça nome de pessoa
+            if amostra.str.len().mean() > 8 and not amostra.str.isdigit().all():
+                funcionario = amostra
+                break
 
     df_final = pd.DataFrame({
         "Origem / Período": nome_origem,
@@ -140,9 +155,7 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         "Unidade de Internação": identificar_setor_serie(leito),
     })
 
-    # Remove linhas vazias ou cabeçalhos repetidos
     df_final = df_final[df_final["Solicitação"] != ""].copy()
-    
     return df_final
 
 # Main Title & Header
@@ -151,8 +164,8 @@ st.markdown("---")
 
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** (suporte inteligente para Excel e CSV de grande porte) "
-    "para realizar análises isoladas ou uma **comparação lado a lado** com total segurança (LGPD Ativada)."
+    "Faça o upload de **uma ou duas planilhas** para realizar análises isoladas ou uma **comparação lado a lado** "
+    "com total segurança (LGPD Ativada)."
 )
 
 col_up1, col_up2 = st.columns(2)
@@ -164,7 +177,7 @@ with col_up2:
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    with st.spinner("A processar a 1ª planilha com detecção inteligente..."):
+    with st.spinner("A processar a 1ª planilha..."):
         try:
             df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
             if not df1.empty:
@@ -173,7 +186,7 @@ if arquivo_1 is not None:
             st.error(f"Erro ao processar a 1ª planilha: {e}")
 
 if arquivo_2 is not None:
-    with st.spinner("A processar a 2ª planilha com detecção inteligente..."):
+    with st.spinner("A processar a 2ª planilha..."):
         try:
             df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
             if not df2.empty:
@@ -190,7 +203,7 @@ if len(dfs_combinados) > 0:
         st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza):,}".replace(",", "."))
         st.info("🔒 **LGPD Ativada:** Nomes de pacientes e números de atendimento foram ocultados.")
 
-        # Filtros Globais
+        # Filtros Globais (incluindo Turno corrigido)
         col_f1, col_f2, col_f3 = st.columns(3)
         with col_f1:
             unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
@@ -240,8 +253,12 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 2. GRÁFICO DE BARRAS
+        # 2. GRÁFICO DE BARRAS (Ordenado em ordem decrescente e colorido corretamente)
         st.subheader("Volume por Unidade de Internação (Comparativo)")
+        
+        # Agrupa para ordenar as unidades do maior para o menor volume total
+        ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
+
         fig_unidade = px.histogram(
             df_filtrado,
             x="Unidade de Internação",
@@ -249,6 +266,7 @@ if len(dfs_combinados) > 0:
             barmode="group",
             title="Comparativo de Volume entre Planilhas",
             text_auto=True,
+            category_orders={"Unidade de Internação": ordem_unidades},
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         fig_unidade.update_traces(textfont_size=10, textangle=0, textposition="outside", cliponaxis=False)
