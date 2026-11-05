@@ -86,7 +86,7 @@ def identificar_turno(hora_str):
         fim_diurno = 19 * 60     # 19:00
         
         if inicio_diurno <= total_minutos <= fim_diurno:
-            return "Diurno"
+            return "Diurno (07:00 - 19:00)"
         else:
             return "Noturno"
     except Exception:
@@ -260,7 +260,7 @@ if arquivo_limpeza is not None:
                 )
                 st.plotly_chart(fig_unidade, use_container_width=True)
 
-            # Gráfico de Picos por Horário mais bonito e com números visíveis
+            # Gráfico de Picos por Horário limpo, elegante e com números fixos visíveis
             st.markdown("---")
             st.subheader("📈 Picos de Solicitações por Horário do Dia")
             
@@ -274,20 +274,26 @@ if arquivo_limpeza is not None:
             hora_counts.columns = ["Hora", "Quantidade"]
             hora_counts = hora_counts.sort_values(by="Hora")
 
-            # Gráfico de área/linha elegante com os números exibidos em cima dos pontos (text="Quantidade")
-            fig_hora = px.area(
+            fig_hora = px.line(
                 hora_counts,
                 x="Hora",
                 y="Quantidade",
+                markers=True,
                 title="Evolução do Volume de Limpezas ao Longo do Dia",
-                color_discrete_sequence=["#FF5733"]
+                color_discrete_sequence=["#2980B9"] # Azul profissional elegante
             )
-            # Mostra os valores exatos em cada ponto e deixa a linha marcante
-            fig_hora.update_traces(mode="lines+markers+text", textposition="top center", textfont=dict(size=12, color="#333333"))
+            # Torna os números visíveis permanentemente em cima dos pontos e destaca os marcadores
+            fig_hora.update_traces(
+                mode="lines+markers+text",
+                text=hora_counts["Quantidade"],
+                textposition="top center",
+                textfont=dict(size=13, color="#1B4F72", family="Arial Black"),
+                line=dict(width=3)
+            )
             fig_hora.update_layout(
-                height=420,
+                height=450,
                 font=dict(size=13),
-                xaxis=dict(title="Hora do Dia (Cheia)", tickfont=dict(size=12)),
+                xaxis=dict(title="Hora do Dia", tickfont=dict(size=12)),
                 yaxis=dict(title="Número de Limpezas", tickfont=dict(size=12)),
                 title_font=dict(size=16),
                 showlegend=False
@@ -296,14 +302,15 @@ if arquivo_limpeza is not None:
 
             st.markdown("---")
             
-            # Botão de Download destacado antes da tabela
+            # Botão de Download com codificação corrigida para o Excel abrir com acentos perfeitos
             col_d1, col_d2 = st.columns([3, 1])
             with col_d1:
                 st.subheader("Tabela Detalhada de Limpezas (Segura)")
             with col_d2:
-                csv_bytes = df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore").to_csv(index=False).encode("utf-8")
+                # utf-8-sig resolve o problema de acentuação corrompida (ex: Solicitação / Funcionário) no Excel do Windows
+                csv_bytes = df_filtrado.drop(columns=["Hora_Cheia"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
                 st.download_button(
-                    label="📥 Baixar CSV",
+                    label="📥 Baixar CSV Corrigido",
                     data=csv_bytes,
                     file_name="relatorio_limpezas_hospitalares.csv",
                     mime="text/csv",
