@@ -1,6 +1,7 @@
 import os
 import re
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -328,7 +329,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM CAMADAS ISOLADAS (Planilha 1 sempre Azul, Planilha 2 sempre Laranja)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM CAMADAS ISOLADAS
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -350,13 +351,11 @@ if len(dfs_combinados) > 0:
         for orig in origens_presentes:
             df_orig_hora = df_horas_comp[df_horas_comp["Origem / Período"] == orig]
             
-            # Preenche todas as 24 horas para garantir continuidade
             df_full = pd.DataFrame({"Hora_Num": horas_base})
             df_full = pd.merge(df_full, df_orig_hora, on="Hora_Num", how="left").fillna({"Quantidade": 0, "Origem / Período": orig})
             df_full = df_full.sort_values("Hora_Num")
             df_full["Hora"] = df_full["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
 
-            # Define cor e posição fixa absoluta por nome da planilha
             if "Planilha 1" in str(orig):
                 cor_linha = "#2980B9" # Azul fixo
                 posicao_texto = "top center"
