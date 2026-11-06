@@ -11,16 +11,23 @@ st.set_page_config(
     layout="wide",
 )
 
-# Injeção de CSS Customizado para UI/UX moderna
+# Injeção de CSS Customizado para cartões coloridos modernos
 st.markdown(
     """
     <style>
-    .stMetric {
-        background-color: #fdfefe;
+    .metric-card-1 {
+        background-color: #f0f7fd;
         padding: 16px;
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        border: 1px solid #e1e4e8;
+        border-left: 6px solid #2980B9;
+    }
+    .metric-card-2 {
+        background-color: #fdf5ec;
+        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-left: 6px solid #E67E22;
     }
     h1, h2, h3 {
         font-family: 'Inter', sans-serif;
@@ -213,10 +220,13 @@ if len(dfs_combinados) > 0:
         if turno_filtro != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
 
-        # 1. MÉTRICAS SEPARADAS POR PLANILHA
-        st.markdown("### 📊 Métricas por Planilha")
+        # 1. MÉTRICAS COLORIDAS E COMPARATIVO DE DIFERENÇAS
+        st.markdown("### 📊 Métricas por Planilha & Comparativo")
         origens_presentes = df_filtrado["Origem / Período"].unique()
         
+        # Guarda valores para cálculo de diferença caso haja exatamente 2 planilhas
+        valores_metricas = {}
+
         cols_met = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
         for i, orig in enumerate(origens_presentes):
             df_orig = df_filtrado[df_filtrado["Origem / Período"] == orig]
@@ -224,12 +234,46 @@ if len(dfs_combinados) > 0:
             term = len(df_orig[df_orig["Tipo de Limpeza"].str.contains("TERMINAL", case=False, na=False)])
             conc = len(df_orig[df_orig["Tipo de Limpeza"].str.contains("CONCORRENTE", case=False, na=False)])
             
+            valores_metricas[orig] = {"Total": tot, "Terminais": term, "Concorrentes": conc}
+            
+            css_class = "metric-card-1" if i == 0 else "metric-card-2"
+            
             with cols_met[i]:
                 st.markdown(f"**📌 {orig}**")
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Total", f"{tot:,}".replace(",", "."))
-                m2.metric("Terminais", f"{term:,}".replace(",", "."))
-                m3.metric("Concorrentes", f"{conc:,}".replace(",", "."))
+                st.markdown(f"""
+                <div class="{css_class}">
+                    <div style="display: flex; justify-content: space-between;">
+                        <div><span style="font-size: 13px; color: #555;">Total</span><br><b style="font-size: 24px;">{tot:,}</b></div>
+                        <div><span style="font-size: 13px; color: #555;">Terminais</span><br><b style="font-size: 24px;">{term:,}</b></div>
+                        <div><span style="font-size: 13px; color: #555;">Concorrentes</span><br><b style="font-size: 24px;">{conc:,}</b></div>
+                    </div>
+                </div>
+                """.replace(",", "."), unsafe_allow_html=True)
+
+        # Se houver duas planilhas, exibe o cartão de diferença abaixo
+        if len(origens_presentes) == 2:
+            p1, p2 = origens_presentes[0], origens_presentes[1]
+            m1, m2, m3 = valores_metricas[p1], valores_metricas[p2]
+            
+            diff_tot = m2["Total"] - m1["Total"]
+            pct_tot = (diff_tot / m1["Total"] * 100) if m1["Total"] > 0 else 0
+            
+            diff_term = m2["Terminais"] - m1["Terminais"]
+            pct_term = (diff_term / m1["Terminais"] * 100) if m1["Terminais"] > 0 else 0
+            
+            diff_conc = m2["Concorrentes"] - m1["Concorrentes"]
+            pct_conc = (diff_conc / m1["Concorrentes"] * 100) if m1["Concorrentes"] > 0 else 0
+            
+            st.markdown(f"""
+            <div style="background-color: #f8f9fa; padding: 14px; border-radius: 10px; border: 1px solid #ddd; margin-top: 12px;">
+                <b style="color: #333;">📈 Diferença ({p2} vs {p1}):</b>
+                <div style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 14px;">
+                    <div><b>Total:</b> {diff_tot:+,:,} ({pct_tot:+.2f}%)</div>
+                    <div><b>Terminais:</b> {diff_term:+,:,} ({pct_term:+.2f}%)</div>
+                    <div><b>Concorrentes:</b> {diff_conc:+,:,} ({pct_conc:+.2f}%)</div>
+                </div>
+            </div>
+            """.replace(",", ".").replace("+.", "+").replace("-.", "-"), unsafe_allow_html=True)
 
         st.markdown("---")
 
@@ -314,7 +358,6 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         
-        # Posicionamento alternado para evitar sobreposição dos números
         text_positions = []
         for _, row in df_horas_final.iterrows():
             if row["Origem / Período"] != origens_presentes[0]:
