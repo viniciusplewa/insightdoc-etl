@@ -249,7 +249,6 @@ if len(dfs_combinados) > 0:
                 </div>
                 """.replace(",", "."), unsafe_allow_html=True)
 
-        # Se houver duas planilhas, exibe o cartão de diferença com formatação segura
         if len(origens_presentes) == 2:
             p1, p2 = origens_presentes[0], origens_presentes[1]
             m1, m2 = valores_metricas[p1], valores_metricas[p2]
@@ -329,7 +328,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Corrigido e isolado por planilha)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -343,7 +342,8 @@ if len(dfs_combinados) > 0:
 
         df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
         
-        df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"]).size().reset_index(name="Quantidade")
+        # Agrupamento estrito por hora e origem para garantir valores reais independentes
+        df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"], as_index=False).size().rename(columns={"size": "Quantidade"})
         
         horas_base = []
         for orig in origens_presentes:
@@ -351,9 +351,9 @@ if len(dfs_combinados) > 0:
                 horas_base.append({"Hora_Num": h, "Origem / Período": orig})
         
         df_base_24h = pd.DataFrame(horas_base)
-        df_horas_final = pd.merge(df_base_24h, df_horas_comp, on=["Hora_Num", "Origem / Período"], how="left").fillna(0)
+        df_horas_final = pd.merge(df_base_24h, df_horas_comp, on=["Hora_Num", "Origem / Período"], how="left").fillna({"Quantidade": 0})
         df_horas_final["Hora"] = df_horas_final["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
-        df_horas_final = df_horas_final.sort_values(by=["Hora_Num"])
+        df_horas_final = df_horas_final.sort_values(by=["Hora_Num", "Origem / Período"])
 
         fig_hora = px.line(
             df_horas_final,
@@ -365,9 +365,10 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         
+        # Posicionamento inteligente alternado para evitar sobreposição e destacar os números
         text_positions = []
         for _, row in df_horas_final.iterrows():
-            if row["Origem / Período"] != origens_presentes[0]:
+            if row["Origem / Período"] == "Planilha 2 (B)":
                 text_positions.append("bottom center")
             else:
                 text_positions.append("top center")
