@@ -74,33 +74,45 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função otimizada e leve para processar relatórios sem sobrecarregar a memória
-def processar_relatorio_limpeza(uploaded_file, nome_origem):
+# Função para detetar automaticamente o ano/período dominante no arquivo
+def detetar_periodo_arquivo(df_raw, nome_padrao):
+    for col in df_raw.columns:
+        amostra = df_raw[col].fillna("").astype(str)
+        anos = amostra.str.extract(r'(20\d{2})', expand=False).dropna()
+        if not anos.empty:
+            ano_mais_frequente = anos.mode()
+            if not ano_mais_frequente.empty:
+                return f"Período: {ano_mais_frequente.iloc[0]}"
+    return nome_padrao
+
+# Função otimizada de processamento
+def processar_relatorio_limpeza(uploaded_file):
     nome_arquivo = uploaded_file.name.lower()
     
     try:
         if nome_arquivo.endswith('.csv'):
             try:
-                df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python', dtype=str, nrows=200000)
+                df_raw = pd.read_csv(uploaded_file, encoding='utf-8', sep=None, engine='python', dtype=str, nrows=300000)
             except Exception:
                 uploaded_file.seek(0)
-                df_raw = pd.read_csv(uploaded_file, encoding='latin1', sep=None, engine='python', dtype=str, nrows=200000)
+                df_raw = pd.read_csv(uploaded_file, encoding='latin1', sep=None, engine='python', dtype=str, nrows=300000)
         else:
             df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
     except Exception as e:
         st.error(f"Erro ao ler o arquivo {uploaded_file.name}: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(), "Desconhecido"
     
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
-    # Identificação rápida de colunas por nome padrão
+    # Deteta o nome/ano automaticamente com base no conteúdo
+    nome_origem = detetar_periodo_arquivo(df_raw, uploaded_file.name.split('.')[0])
+    
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
     col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
     col_tipo = next((c for c in df_raw.columns if any(k in c for k in ["TIPO", "LIMPEZA"])), None)
 
     solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
-    # Extração segura de hora focando nas colunas mais prováveis ou na primeira que contenha o padrão
     hora = pd.Series("", index=df_raw.index)
     candidatas_hora = [c for c in df_raw.columns if any(k in c for k in ["HORA", "DATA", "EMISSAO"])]
     
@@ -110,7 +122,6 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
             hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
             break
             
-    # Se ainda não encontrou, pega a primeira coluna que tiver o padrão HH:MM nas primeiras 100 linhas (super rápido)
     if (hora == "").all():
         for col in df_raw.columns[:15]:
             amostra = df_raw[col].fillna("").astype(str).str.strip()
@@ -118,7 +129,6 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
                 break
 
-    # Leito
     leito = pd.Series("PA", index=df_raw.index)
     if col_leito and col_leito in df_raw.columns:
         leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
@@ -130,7 +140,6 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 leito = df_raw[col].fillna("PA").astype(str).str.strip()
                 break
 
-    # Tipo de Limpeza
     tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_raw.index)
     if col_tipo and col_tipo in df_raw.columns:
         val_tipo = df_raw[col_tipo].fillna("").astype(str).str.upper()
@@ -143,7 +152,6 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
                 break
 
-    # LGPD Compliance: Oculta totalmente qualquer dado sensível
     funcionario_protegido = pd.Series("🔒 [LGPD Ocultado]", index=df_raw.index)
 
     df_final = pd.DataFrame({
@@ -158,7 +166,7 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     })
 
     df_final = df_final[df_final["Solicitação"] != ""].copy()
-    return df_final
+    return df_final, nome_origem
 
 # Main Title & Header
 st.title("🏥 InsightDoc-ETL: Gestão Hospitalar & Comparador de Limpezas")
@@ -179,14 +187,14 @@ with col_up2:
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    with st.spinner("A processar a 1ª planilha em alta performance..."):
-        df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
+    with st.spinner("A processar a 1ª planilha..."):
+        df1, nome1 = processar_relatorio_limpeza(arquivo_1)
         if not df1.empty:
             dfs_combinados.append(df1)
 
 if arquivo_2 is not None:
-    with st.spinner("A processar a 2ª planilha em alta performance..."):
-        df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
+    with st.spinner("A processar a 2ª planilha..."):
+        df2, nome2 = processar_relatorio_limpeza(arquivo_2)
         if not df2.empty:
             dfs_combinados.append(df2)
 
@@ -219,17 +227,28 @@ if len(dfs_combinados) > 0:
         if turno_filtro != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total de Limpezas Filtradas", f"{len(df_filtrado):,}".replace(",", "."))
-        m2.metric("Limpezas Terminais", f"{len(df_filtrado[df_filtrado['Tipo de Limpeza'].str.contains('TERMINAL', case=False, na=False)]):,}".replace(",", "."))
-        m3.metric("Limpezas Concorrentes", f"{len(df_filtrado[df_filtrado['Tipo de Limpeza'].str.contains('CONCORRENTE', case=False, na=False)]):,}".replace(",", "."))
+        # 1. MÉTRICAS SEPARADAS POR PERÍODO
+        st.markdown("### 📊 Métricas por Período")
+        origens_presentes = df_filtrado["Origem / Período"].unique()
+        
+        cols_met = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
+        for i, orig in enumerate(origens_presentes):
+            df_orig = df_filtrado[df_filtrado["Origem / Período"] == orig]
+            tot = len(df_orig)
+            term = len(df_orig[df_orig["Tipo de Limpeza"].str.contains("TERMINAL", case=False, na=False)])
+            conc = len(df_orig[df_orig["Tipo de Limpeza"].str.contains("CONCORRENTE", case=False, na=False)])
+            
+            with cols_met[i]:
+                st.markdown(f"**📌 {orig}**")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total", f"{tot:,}".replace(",", "."))
+                m2.metric("Terminais", f"{term:,}".replace(",", "."))
+                m3.metric("Concorrentes", f"{conc:,}".replace(",", "."))
 
         st.markdown("---")
 
-        # 1. GRÁFICOS DE PIZZA SEPARADOS
-        st.subheader("Proporção por Tipo de Limpeza (Separado por Planilha)")
-        origens_presentes = df_filtrado["Origem / Período"].unique()
-        
+        # 2. GRÁFICOS DE PIZZA SEPARADOS
+        st.subheader("Proporção por Tipo de Limpeza (Separado por Período)")
         cols_pizza = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
         for i, origem in enumerate(origens_presentes):
             with cols_pizza[i]:
@@ -249,7 +268,7 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 2. GRÁFICO DE BARRAS
+        # 3. GRÁFICO DE BARRAS
         st.subheader("Volume por Unidade de Internação (Comparativo)")
         ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
 
@@ -258,7 +277,7 @@ if len(dfs_combinados) > 0:
             x="Unidade de Internação",
             color="Origem / Período",
             barmode="group",
-            title="Comparativo de Volume entre Planilhas",
+            title="Comparativo de Volume entre Períodos",
             text_auto=True,
             category_orders={"Unidade de Internação": ordem_unidades},
             color_discrete_sequence=["#2980B9", "#E67E22"]
@@ -269,11 +288,11 @@ if len(dfs_combinados) > 0:
             font=dict(size=12),
             xaxis=dict(tickangle=-35, title="Unidades de Internação"),
             yaxis=dict(title="Quantidade"),
-            legend=dict(title=dict(text="<b>Planilha</b>"))
+            legend=dict(title=dict(text="<b>Período</b>"))
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 3. GRÁFICO DE LINHA TEMPORAL COMPARATIVO
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Corrigido para evitar sobreposição de números)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -308,19 +327,29 @@ if len(dfs_combinados) > 0:
             title="Evolução Temporal Comparativa Detalhada",
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
+        
+        # Posicionamento alternado para evitar que os números fiquem colados/sobrepostos
+        text_positions = []
+        for _, row in df_horas_final.iterrows():
+            # Se for a segunda série (índice ímpar ou período B), joga para baixo para não sobrepor
+            if row["Origem / Período"] != origens_presentes[0]:
+                text_positions.append("bottom center")
+            else:
+                text_positions.append("top center")
+
         fig_hora.update_traces(
             mode="lines+markers+text",
             text=df_horas_final["Quantidade"],
-            textposition="top center",
-            textfont=dict(size=11, family="Arial Black"),
+            textposition=text_positions,
+            textfont=dict(size=10, family="Arial Black"),
             line=dict(width=3)
         )
         fig_hora.update_layout(
-            height=600,
+            height=650,
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
-            legend=dict(title=dict(text="<b>Planilha</b>"))
+            legend=dict(title=dict(text="<b>Período</b>"))
         )
         st.plotly_chart(fig_hora, use_container_width=True)
 
@@ -336,7 +365,7 @@ if len(dfs_combinados) > 0:
                 label="📥 Baixar CSV Combinado",
                 data=csv_bytes,
                 file_name="relatorio_comparativo_limpezas.csv",
-                mime="text/css",
+                mime="text/csv",
                 use_container_width=True
             )
 
