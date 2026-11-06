@@ -328,7 +328,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM TEXTOS DE CORES DIFERENCIADAS (Azul e Laranja)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM CORES FIXAS POR PLANILHA
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -364,16 +364,16 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         
-        # Atribuição de cores exatas para os textos destacarem cada linha (Azul para Planilha 1 e Laranja para Planilha 2)
+        # Cores e posições fixas garantidas pelo NOME da planilha (Planilha 1 sempre Azul em cima, Planilha 2 sempre Laranja em baixo)
         text_colors = []
         text_positions = []
         for _, row in df_horas_final.iterrows():
-            if "Planilha 2" in str(row["Origem / Período"]):
-                text_colors.append("#D35400") # Laranja escuro destacado
-                text_positions.append("bottom center")
-            else:
-                text_colors.append("#1B4F72") # Azul escuro destacado
+            if "Planilha 1" in str(row["Origem / Período"]):
+                text_colors.append("#1B4F72") # Azul escuro fixo
                 text_positions.append("top center")
+            else:
+                text_colors.append("#D35400") # Laranja escuro fixo
+                text_positions.append("bottom center")
 
         fig_hora.update_traces(
             mode="lines+markers+text",
