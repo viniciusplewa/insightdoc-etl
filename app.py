@@ -1,7 +1,7 @@
 import os
 import re
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 # Page configuration
@@ -328,7 +328,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM CORES FIXAS POR PLANILHA
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM CAMADAS ISOLADAS (Planilha 1 sempre Azul, Planilha 2 sempre Laranja)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -341,47 +341,41 @@ if len(dfs_combinados) > 0:
                 return None
 
         df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
-        
         df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"], as_index=False).size().rename(columns={"size": "Quantidade"})
         
-        horas_base = []
+        horas_base = [h for h in range(24)]
+        
+        fig_hora = go.Figure()
+
         for orig in origens_presentes:
-            for h in range(24):
-                horas_base.append({"Hora_Num": h, "Origem / Período": orig})
-        
-        df_base_24h = pd.DataFrame(horas_base)
-        df_horas_final = pd.merge(df_base_24h, df_horas_comp, on=["Hora_Num", "Origem / Período"], how="left").fillna({"Quantidade": 0})
-        df_horas_final["Hora"] = df_horas_final["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
-        df_horas_final = df_horas_final.sort_values(by=["Hora_Num", "Origem / Período"])
+            df_orig_hora = df_horas_comp[df_horas_comp["Origem / Período"] == orig]
+            
+            # Preenche todas as 24 horas para garantir continuidade
+            df_full = pd.DataFrame({"Hora_Num": horas_base})
+            df_full = pd.merge(df_full, df_orig_hora, on="Hora_Num", how="left").fillna({"Quantidade": 0, "Origem / Período": orig})
+            df_full = df_full.sort_values("Hora_Num")
+            df_full["Hora"] = df_full["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
 
-        fig_hora = px.line(
-            df_horas_final,
-            x="Hora",
-            y="Quantidade",
-            color="Origem / Período",
-            markers=True,
-            title="Evolução Temporal Comparativa Detalhada",
-            color_discrete_sequence=["#2980B9", "#E67E22"]
-        )
-        
-        # Cores e posições fixas garantidas pelo NOME da planilha (Planilha 1 sempre Azul em cima, Planilha 2 sempre Laranja em baixo)
-        text_colors = []
-        text_positions = []
-        for _, row in df_horas_final.iterrows():
-            if "Planilha 1" in str(row["Origem / Período"]):
-                text_colors.append("#1B4F72") # Azul escuro fixo
-                text_positions.append("top center")
+            # Define cor e posição fixa absoluta por nome da planilha
+            if "Planilha 1" in str(orig):
+                cor_linha = "#2980B9" # Azul fixo
+                posicao_texto = "top center"
             else:
-                text_colors.append("#D35400") # Laranja escuro fixo
-                text_positions.append("bottom center")
+                cor_linha = "#E67E22" # Laranja fixo
+                posicao_texto = "bottom center"
 
-        fig_hora.update_traces(
-            mode="lines+markers+text",
-            text=df_horas_final["Quantidade"],
-            textposition=text_positions,
-            textfont=dict(size=10, family="Arial Black", color=text_colors),
-            line=dict(width=3)
-        )
+            fig_hora.add_trace(go.Scatter(
+                x=df_full["Hora"],
+                y=df_full["Quantidade"],
+                name=orig,
+                mode="lines+markers+text",
+                text=df_full["Quantidade"],
+                textposition=posicao_texto,
+                textfont=dict(size=10, family="Arial Black", color=cor_linha),
+                line=dict(width=3, color=cor_linha),
+                marker=dict(size=6, color=cor_linha)
+            ))
+
         fig_hora.update_layout(
             height=650,
             font=dict(size=13),
