@@ -580,18 +580,35 @@ else:
                     st.info(f"Sem registros para {origem} com esses filtros.")
                     continue
 
+                # A pizza compara somente os dois tipos principais solicitados.
+                # Tipos pontuais/não identificados não entram nesse gráfico.
+                df_pizza = df_origem[
+                    df_origem["Tipo de Limpeza"].str.startswith(
+                        ("TERMINAL", "CONCORRENTE"), na=False
+                    )
+                ].copy()
+                df_pizza["Categoria Pizza"] = df_pizza["Tipo de Limpeza"].apply(
+                    lambda tipo: "Terminal" if str(tipo).startswith("TERMINAL")
+                    else "Concorrente"
+                )
                 tipo_counts = (
-                    df_origem["Tipo de Limpeza"]
+                    df_pizza["Categoria Pizza"]
                     .value_counts()
+                    .reindex(["Terminal", "Concorrente"], fill_value=0)
                     .rename_axis("Tipo de Limpeza")
                     .reset_index(name="Quantidade")
                 )
+                tipo_counts = tipo_counts[tipo_counts["Quantidade"] > 0]
+                if tipo_counts.empty:
+                    st.info(f"Não há terminais ou concorrentes para {origem} com esses filtros.")
+                    continue
                 fig_pizza = px.pie(
                     tipo_counts,
                     names="Tipo de Limpeza",
                     values="Quantidade",
                     title=f"Distribuição - {origem}",
-                    color_discrete_sequence=["#2980B9", "#E67E22", "#27AE60", "#8E44AD"],
+                    color="Tipo de Limpeza",
+                    color_discrete_map={"Terminal": "#1976D2", "Concorrente": "#F28E2B"},
                 )
                 fig_pizza.update_layout(height=400, font=dict(size=13))
                 st.plotly_chart(fig_pizza, use_container_width=True)
@@ -613,9 +630,26 @@ else:
                 key="criterio_ordenacao",
             )
 
+        # Consolida todas as áreas do Pronto Atendimento em uma única barra PA.
+        # Inclui variações de nomenclatura como observação, extra e estabilização.
+        termos_pa = (
+            "PA", "PRONTO ATENDIMENTO", "OBSERVACAO", "OBSERVAÇÃO",
+            "OBS M", "OBS F", "OBSERV", "EXTRA", "ESTABILIZACAO",
+            "ESTABILIZAÇÃO", "ESTAB", "EMERGENCIA", "EMERGÊNCIA",
+        )
+        df_barras = df_filtrado.copy()
+        def agrupar_unidade_grafico(valor):
+            texto = normalizar_texto(valor)
+            if any(normalizar_texto(termo) in texto for termo in termos_pa):
+                return "PA (Total)"
+            return str(valor)
+        df_barras["Unidade do Gráfico"] = df_barras["Unidade de Internação"].apply(
+            agrupar_unidade_grafico
+        )
+
         contagem_unidades = (
-            df_filtrado.groupby(
-                ["Unidade de Internação", "Origem / Período"],
+            df_barras.groupby(
+                ["Unidade do Gráfico", "Origem / Período"],
                 as_index=False,
             )
             .size()
@@ -623,7 +657,7 @@ else:
         )
 
         pivot_unidades = contagem_unidades.pivot(
-            index="Unidade de Internação",
+            index="Unidade do Gráfico",
             columns="Origem / Período",
             values="Quantidade",
         ).fillna(0)
@@ -647,13 +681,13 @@ else:
 
         fig_unidade = px.bar(
             contagem_unidades,
-            x="Unidade de Internação",
+            x="Unidade do Gráfico",
             y="Quantidade",
             color="Origem / Período",
             barmode="group",
             title=f"Comparativo ordenado por: {criterio_ordenacao}",
             text="Quantidade",
-            category_orders={"Unidade de Internação": ordem_unidades},
+            category_orders={"Unidade do Gráfico": ordem_unidades},
             color_discrete_sequence=["#2980B9", "#E67E22"],
         )
         fig_unidade.update_traces(
@@ -670,7 +704,7 @@ else:
         fig_unidade.update_layout(
             height=650,
             font=dict(size=12),
-            xaxis=dict(tickangle=-35, title="Unidades de Internação"),
+            xaxis=dict(tickangle=-35, title="Unidades de Internação (PA consolidado)"),
             yaxis=dict(title="Quantidade de limpezas"),
             legend=dict(title=dict(text="Planilha")),
         )
@@ -725,25 +759,31 @@ else:
             )
             fig_hora = go.Figure()
 
-            for origem in origens_presentes:
+            cores_origem = ["#1565C0", "#F28E2B", "#2E7D32", "#8E44AD"]
+            for indice, origem in enumerate(origens_presentes):
                 serie = (
                     contagem_horas[contagem_horas["Origem / Período"] == origem]
                     .set_index("Hora_Num")["Quantidade"]
                     .reindex(range(24), fill_value=0)
                 )
+                cor = cores_origem[indice % len(cores_origem)]
                 fig_hora.add_trace(
                     go.Scatter(
                         x=[f"{h:02d}h" for h in range(24)],
                         y=serie.values,
                         name=origem,
-                        mode="lines+markers",
-                        line=dict(width=3),
-                        marker=dict(size=6),
+                        mode="lines+markers+text",
+                        text=[formatar_numero(v) for v in serie.values],
+                        textposition="top center",
+                        textfont=dict(size=10, color=cor),
+                        line=dict(width=3.5, color=cor),
+                        marker=dict(size=7, color=cor),
+                        cliponaxis=False,
                     )
                 )
 
             fig_hora.update_layout(
-                height=550,
+                height=600,
                 font=dict(size=13),
                 xaxis=dict(title="Hora do dia"),
                 yaxis=dict(title="Número de limpezas"),
