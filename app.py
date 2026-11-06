@@ -305,23 +305,31 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 3. GRÁFICO DE BARRAS COM FILTRO DE ORDENAÇÃO POR DIFERENÇA OU VOLUME
+        # 3. GRÁFICO DE BARRAS COM DIFERENÇA ABSOLUTA E PERCENTUAL ACIMA DOS SETORES
         st.subheader("Volume por Unidade de Internação (Comparativo)")
         
         col_ord1, col_ord2 = st.columns([2, 4])
         with col_ord1:
             criterio_ordenacao = st.selectbox(
                 "Ordenar setores por:",
-                ["Maior Volume Geral", "Maior Diferença Absoluta (Planilhas)"]
+                ["Maior Diferença Absoluta (Planilhas)", "Maior Volume Geral"]
             )
 
-        # Lógica de cálculo da ordem dos setores com base no filtro selecionado
-        if criterio_ordenacao == "Maior Diferença Absoluta (Planilhas)" and len(origens_presentes) == 2:
+        # Se houver duas planilhas, preparamos a tabela comparativa e as anotações de diferença
+        if len(origens_presentes) == 2:
             p_a, p_b = origens_presentes[0], origens_presentes[1]
             pivot_unidades = df_filtrado.pivot_table(index="Unidade de Internação", columns="Origem / Período", values="Solicitação", aggfunc="count").fillna(0)
+            
             if p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
-                pivot_unidades["Diferenca"] = (pivot_unidades[p_b] - pivot_unidades[p_a]).abs()
-                ordem_unidades = pivot_unidades.sort_values(by="Diferenca", ascending=False).index.tolist()
+                pivot_unidades["Diff_Abs"] = pivot_unidades[p_b] - pivot_unidades[p_a]
+                pivot_unidades["Diff_Pct"] = (pivot_unidades["Diff_Abs"] / pivot_unidades[p_a].replace(0, 1)) * 100
+                pivot_unidades["Abs_Diff"] = pivot_unidades["Diff_Abs"].abs()
+                
+                if criterio_ordenacao == "Maior Diferença Absoluta (Planilhas)":
+                    ordem_unidades = pivot_unidades.sort_values(by="Abs_Diff", ascending=False).index.tolist()
+                else:
+                    pivot_unidades["Total_Vol"] = pivot_unidades[p_a] + pivot_unidades[p_b]
+                    ordem_unidades = pivot_unidades.sort_values(by="Total_Vol", ascending=False).index.tolist()
             else:
                 ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
         else:
@@ -338,8 +346,31 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         fig_unidade.update_traces(textfont_size=10, textangle=0, textposition="outside", cliponaxis=False)
+
+        # Adiciona anotações de diferença (numérica e percentual) acima de cada par de barras
+        if len(origens_presentes) == 2 and p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
+            for setor in ordem_unidades:
+                if setor in pivot_unidades.index:
+                    d_abs = int(pivot_unidades.loc[setor, "Diff_Abs"])
+                    d_pct = pivot_unidades.loc[setor, "Diff_Pct"]
+                    val_a = pivot_unidades.loc[setor, p_a]
+                    val_b = pivot_unidades.loc[setor, p_b]
+                    max_val = max(val_a, val_b)
+                    
+                    sinal = "+" if d_abs > 0 else ""
+                    texto_diff = f"Δ: {sinal}{d_abs:,} ({sinal}{d_pct:.1f}%)".replace(",", ".")
+                    
+                    fig_unidade.add_annotation(
+                        x=setor,
+                        y=max_val + (max_val * 0.12) + 200, # Posiciona logo acima da barra mais alta
+                        text=texto_diff,
+                        showarrow=False,
+                        font=dict(size=10, color="#2C3E50", family="Arial Black"),
+                        align="center"
+                    )
+
         fig_unidade.update_layout(
-            height=550,
+            height=600,
             font=dict(size=12),
             xaxis=dict(tickangle=-35, title="Unidades de Internação"),
             yaxis=dict(title="Quantidade"),
@@ -447,7 +478,7 @@ if len(dfs_combinados) > 0:
                 marker=dict(size=6, color=cor_linha)
             ))
 
-        fig_hora.update_traces(cliponaxis5=False) if hasattr(fig_hora, 'update_traces') else None
+        fig_hora.update_traces(cliponaxis=False)
         fig_hora.update_layout(
             height=650,
             font=dict(size=13),
