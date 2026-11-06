@@ -759,7 +759,9 @@ else:
             )
             fig_hora = go.Figure()
 
+            # Tons das linhas e cores contrastantes para os rótulos.
             cores_origem = ["#1565C0", "#F28E2B", "#2E7D32", "#8E44AD"]
+            cores_rotulos = ["#64B5F6", "#B85C00", "#66BB6A", "#6A1B9A"]
             for indice, origem in enumerate(origens_presentes):
                 serie = (
                     contagem_horas[contagem_horas["Origem / Período"] == origem]
@@ -775,7 +777,7 @@ else:
                         mode="lines+markers+text",
                         text=[formatar_numero(v) for v in serie.values],
                         textposition="top center",
-                        textfont=dict(size=16, color=cor, family="Arial Black"),
+                        textfont=dict(size=14, color=cores_rotulos[indice % len(cores_rotulos)], family="Arial Black"),
                         line=dict(width=3.5, color=cor),
                         marker=dict(size=7, color=cor),
                         cliponaxis=False,
