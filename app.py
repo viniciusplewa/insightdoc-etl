@@ -74,19 +74,8 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função para detetar automaticamente o ano/período dominante no arquivo
-def detetar_periodo_arquivo(df_raw, nome_padrao):
-    for col in df_raw.columns:
-        amostra = df_raw[col].fillna("").astype(str)
-        anos = amostra.str.extract(r'(20\d{2})', expand=False).dropna()
-        if not anos.empty:
-            ano_mais_frequente = anos.mode()
-            if not ano_mais_frequente.empty:
-                return f"Período: {ano_mais_frequente.iloc[0]}"
-    return nome_padrao
-
-# Função otimizada de processamento
-def processar_relatorio_limpeza(uploaded_file):
+# Função de processamento otimizada
+def processar_relatorio_limpeza(uploaded_file, nome_origem):
     nome_arquivo = uploaded_file.name.lower()
     
     try:
@@ -100,12 +89,9 @@ def processar_relatorio_limpeza(uploaded_file):
             df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
     except Exception as e:
         st.error(f"Erro ao ler o arquivo {uploaded_file.name}: {e}")
-        return pd.DataFrame(), "Desconhecido"
+        return pd.DataFrame()
     
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
-    
-    # Deteta o nome/ano automaticamente com base no conteúdo
-    nome_origem = detetar_periodo_arquivo(df_raw, uploaded_file.name.split('.')[0])
     
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
     col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
@@ -166,7 +152,7 @@ def processar_relatorio_limpeza(uploaded_file):
     })
 
     df_final = df_final[df_final["Solicitação"] != ""].copy()
-    return df_final, nome_origem
+    return df_final
 
 # Main Title & Header
 st.title("🏥 InsightDoc-ETL: Gestão Hospitalar & Comparador de Limpezas")
@@ -188,13 +174,13 @@ dfs_combinados = []
 
 if arquivo_1 is not None:
     with st.spinner("A processar a 1ª planilha..."):
-        df1, nome1 = processar_relatorio_limpeza(arquivo_1)
+        df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
         if not df1.empty:
             dfs_combinados.append(df1)
 
 if arquivo_2 is not None:
     with st.spinner("A processar a 2ª planilha..."):
-        df2, nome2 = processar_relatorio_limpeza(arquivo_2)
+        df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
         if not df2.empty:
             dfs_combinados.append(df2)
 
@@ -227,8 +213,8 @@ if len(dfs_combinados) > 0:
         if turno_filtro != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
 
-        # 1. MÉTRICAS SEPARADAS POR PERÍODO
-        st.markdown("### 📊 Métricas por Período")
+        # 1. MÉTRICAS SEPARADAS POR PLANILHA
+        st.markdown("### 📊 Métricas por Planilha")
         origens_presentes = df_filtrado["Origem / Período"].unique()
         
         cols_met = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
@@ -248,7 +234,7 @@ if len(dfs_combinados) > 0:
         st.markdown("---")
 
         # 2. GRÁFICOS DE PIZZA SEPARADOS
-        st.subheader("Proporção por Tipo de Limpeza (Separado por Período)")
+        st.subheader("Proporção por Tipo de Limpeza (Separado por Planilha)")
         cols_pizza = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
         for i, origem in enumerate(origens_presentes):
             with cols_pizza[i]:
@@ -277,7 +263,7 @@ if len(dfs_combinados) > 0:
             x="Unidade de Internação",
             color="Origem / Período",
             barmode="group",
-            title="Comparativo de Volume entre Períodos",
+            title="Comparativo de Volume entre Planilhas",
             text_auto=True,
             category_orders={"Unidade de Internação": ordem_unidades},
             color_discrete_sequence=["#2980B9", "#E67E22"]
@@ -288,11 +274,11 @@ if len(dfs_combinados) > 0:
             font=dict(size=12),
             xaxis=dict(tickangle=-35, title="Unidades de Internação"),
             yaxis=dict(title="Quantidade"),
-            legend=dict(title=dict(text="<b>Período</b>"))
+            legend=dict(title=dict(text="<b>Planilha</b>"))
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Corrigido para evitar sobreposição de números)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -328,10 +314,9 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         
-        # Posicionamento alternado para evitar que os números fiquem colados/sobrepostos
+        # Posicionamento alternado para evitar sobreposição dos números
         text_positions = []
         for _, row in df_horas_final.iterrows():
-            # Se for a segunda série (índice ímpar ou período B), joga para baixo para não sobrepor
             if row["Origem / Período"] != origens_presentes[0]:
                 text_positions.append("bottom center")
             else:
@@ -349,7 +334,7 @@ if len(dfs_combinados) > 0:
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
-            legend=dict(title=dict(text="<b>Período</b>"))
+            legend=dict(title=dict(text="<b>Planilha</b>"))
         )
         st.plotly_chart(fig_hora, use_container_width=True)
 
