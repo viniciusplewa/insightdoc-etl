@@ -103,40 +103,29 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
-    # Rastreio inteligente adaptado à estrutura real do arquivo (ex: R_HISTORICO_QUARTOS.csv)
+    # 1. Identificação exata das colunas baseada na estrutura real do relatório hospitalar
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
     
-    # Encontrar coluna de Leito
-    col_leito = None
-    for c in df_raw.columns:
-        if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"]):
-            col_leito = c
-            break
-    if not col_leito:
-        col_leito = "LEITO" if "LEITO" in df_raw.columns else df_raw.columns[10] if len(df_raw.columns) > 10 else None
-
-    # Encontrar coluna de Hora
-    col_hora = None
-    for c in df_raw.columns:
-        if any(k in c for k in ["HORA", "DATA", "EMISSAO"]):
-            amostra = df_raw[c].fillna("").astype(str).str.strip()
-            if amostra.str.contains(r'\d{2}:\d{2}', na=False).any():
-                col_hora = c
-                break
-    if not col_hora:
-        col_hora = "HORA" if "HORA" in df_raw.columns else df_raw.columns[9] if len(df_raw.columns) > 9 else None
-
-    # Encontrar coluna de Colaborador (incluindo Unnamed: 13 do CSV real)
+    col_leito = "LEITO" if "LEITO" in df_raw.columns else next((c for c in df_raw.columns if "LEITO" in c), df_raw.columns[10] if len(df_raw.columns) > 10 else None)
+    col_hora = "HORA" if "HORA" in df_raw.columns else next((c for c in df_raw.columns if "HORA" in c), df_raw.columns[9] if len(df_raw.columns) > 9 else None)
+    
+    # Coluna exclusiva do colaborador (procura por Unnamed: 13 ou colunas de funcionário, evitando paciente)
     col_func = None
     for c in df_raw.columns:
         if any(k in c for k in ["FUNCIONARIO", "COLABORADOR", "RESPONSAVEL", "EXECUTANTE", "OPERADOR", "FUNCIONÁRIO", "UNNAMED: 13"]):
-            amostra = df_raw[c].dropna()
-            if not amostra.empty and not amostra.str.contains("SOLICITA|LEITO|TIPO", case=False).any():
-                col_func = c
+            if "PACIENTE" not in c:
+                amostra = df_raw[c].dropna()
+                if not amostra.empty and not amostra.str.contains("SOLICITA|LEITO|TIPO", case=False).any():
+                    col_func = c
+                    break
+                    
+    # Se ainda não encontrou, pega por defeito a última coluna do dataframe (que contém os nomes dos colaboradores no CSV)
+    if not col_func and len(df_raw.columns) > 1:
+        col_func = df_raw.columns[-1]
 
     solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
-    # Extração robusta de Hora
+    # Extração de Hora
     hora = pd.Series("", index=df_raw.index)
     if col_hora and col_hora in df_raw.columns:
         hora = df_raw[col_hora].fillna("").astype(str).str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
@@ -148,32 +137,24 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
                 break
 
-    # Extração robusta de Leito
-    leito = pd.Series("", index=df_raw.index)
+    # Extração de Leito
+    leito = pd.Series("PA", index=df_raw.index)
     if col_leito and col_leito in df_raw.columns:
-        leito = df_raw[col_leito].fillna("").astype(str).str.strip()
+        leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
+        leito = leito.replace(["nan", "NAN", "NaN", ""], "PA")
     
-    if (leito == "").all():
+    if (leito == "PA").all():
         for col in df_raw.columns:
             amostra = df_raw[col].fillna("").astype(str).str.upper()
             if amostra.str.contains("LEITO|QUARTO|EXTRA|OBS|ESTAB", na=False).any():
-                leito = df_raw[col].fillna("").astype(str).str.strip()
+                leito = df_raw[col].fillna("PA").astype(str).str.strip()
                 break
 
-    # Extração do Colaborador (ignorando linhas vazias ou cabeçalhos)
+    # Extração rigorosa do Colaborador (Garantindo que venha apenas da coluna de executantes e nunca do paciente)
     colaborador = pd.Series("Não Informado", index=df_raw.index)
     if col_func and col_func in df_raw.columns:
         colaborador = df_raw[col_func].fillna("Não Informado").astype(str).str.strip()
         colaborador = colaborador.replace(["nan", "NAN", "NaN", ""], "Não Informado")
-    else:
-        # Se não achou pelo nome, pega a última coluna de texto preenchida com nomes
-        for col in reversed(df_raw.columns):
-            amostra = df_raw[col].dropna().astype(str).str.strip()
-            if not amostra.empty:
-                # Verifica se parece nome de pessoa (contém letras e espaços)
-                if amostra.str.contains(r'^[A-Z\s]+$', na=False).mean() > 0.3:
-                    colaborador = df_raw[col].fillna("Não Informado").astype(str).str.strip()
-                    break
 
     # Extração de Tipo de Limpeza
     tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_raw.index)
@@ -194,7 +175,7 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         "Unidade de Internação": identificar_setor_serie(leito),
     })
 
-    # Filtro rigoroso para manter apenas as linhas de dados válidas (ignorando cabeçalhos repetidos e linhas vazias)
+    # Filtro rigoroso para manter apenas as linhas de dados válidas
     df_final = df_final[
         (df_final["Solicitação"] != "") & 
         (df_final["Solicitação"].str.match(r'^\d+$', na=False))
