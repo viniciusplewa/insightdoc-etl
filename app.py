@@ -329,7 +329,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM DESLOCAMENTO SEGURO
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM POSICIONAMENTO LATERAL INTELIGENTE
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -358,10 +358,10 @@ if len(dfs_combinados) > 0:
 
             if "Planilha 1" in str(orig):
                 cor_linha = "#2980B9"
-                posicao_texto = "top center"
+                posicao_texto = "top right"  # Posiciona no canto superior direito do ponto para evitar o traço diagonal
             else:
                 cor_linha = "#E67E22"
-                posicao_texto = "bottom center"
+                posicao_texto = "bottom left" # Posiciona no canto inferior esquerdo do ponto
 
             fig_hora.add_trace(go.Scatter(
                 x=df_full["Hora"],
@@ -381,7 +381,8 @@ if len(dfs_combinados) > 0:
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
-            legend=dict(title=dict(text="<b>Planilha</b>"))
+            legend=dict(title=dict(text="<b>Planilha</b>")),
+            hovermode="x unified"
         )
         st.plotly_chart(fig_hora, use_container_width=True)
 
