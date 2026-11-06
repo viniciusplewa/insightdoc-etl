@@ -305,7 +305,7 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 3. GRÁFICO DE BARRAS COM DIFERENÇA EM ESPAÇO SUPERIOR SEGURO
+        # 3. GRÁFICO DE BARRAS COM CORES DINÂMICAS NA DIFERENÇA (Azul ou Laranja)
         st.subheader("Volume por Unidade de Internação (Comparativo)")
         
         col_ord1, col_ord2 = st.columns([2, 4])
@@ -346,7 +346,6 @@ if len(dfs_combinados) > 0:
         )
         fig_unidade.update_traces(textfont_size=10, textangle=0, textposition="outside", cliponaxis=False)
 
-        # Calcula o teto máximo das barras para estender o eixo Y e dar espaço seguro para a diferença
         max_y_global = df_filtrado.groupby(["Unidade de Internação", "Origem / Período"]).size().max() if not df_filtrado.empty else 1000
 
         if len(origens_presentes) == 2 and p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
@@ -358,20 +357,23 @@ if len(dfs_combinados) > 0:
                     val_b = pivot_unidades.loc[setor, p_b]
                     max_val = max(val_a, val_b)
                     
+                    # Define a cor da anotação com base em qual planilha tem mais limpezas
+                    # Se val_a >= val_b, o azul domina -> Cor azul (#2980B9)
+                    # Se val_b > val_a, o laranja domina -> Cor laranja (#D35400)
+                    cor_anotacao = "#2980B9" if val_a >= val_b else "#D35400"
+                    
                     sinal = "+" if d_abs > 0 else ""
                     texto_diff = f"Δ: {sinal}{d_abs:,} ({sinal}{d_pct:.1f}%)".replace(",", ".")
                     
-                    # Posiciona a anotação bem acima dos números das barras individuais
                     fig_unidade.add_annotation(
                         x=setor,
                         y=max_val + (max_y_global * 0.18),
                         text=texto_diff,
                         showarrow=False,
-                        font=dict(size=11, color="#1B4F72", family="Arial Black"),
+                        font=dict(size=11, color=cor_anotacao, family="Arial Black"),
                         align="center"
                     )
 
-        # Expande o limite superior do eixo Y para garantir que a anotação nunca seja cortada ou colida com as barras
         fig_unidade.update_yaxes(range=[0, max_y_global * 1.35])
         fig_unidade.update_layout(
             height=650,
