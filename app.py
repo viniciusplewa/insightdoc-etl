@@ -224,7 +224,6 @@ if len(dfs_combinados) > 0:
         st.markdown("### 📊 Métricas por Planilha & Comparativo")
         origens_presentes = df_filtrado["Origem / Período"].unique()
         
-        # Guarda valores para cálculo de diferença caso haja exatamente 2 planilhas
         valores_metricas = {}
 
         cols_met = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
@@ -250,10 +249,10 @@ if len(dfs_combinados) > 0:
                 </div>
                 """.replace(",", "."), unsafe_allow_html=True)
 
-        # Se houver duas planilhas, exibe o cartão de diferença abaixo
+        # Se houver duas planilhas, exibe o cartão de diferença corrigido de forma segura
         if len(origens_presentes) == 2:
             p1, p2 = origens_presentes[0], origens_presentes[1]
-            m1, m2, m3 = valores_metricas[p1], valores_metricas[p2]
+            m1, m2 = valores_metricas[p1], valores_metricas[p2]
             
             diff_tot = m2["Total"] - m1["Total"]
             pct_tot = (diff_tot / m1["Total"] * 100) if m1["Total"] > 0 else 0
