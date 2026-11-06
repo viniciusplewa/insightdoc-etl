@@ -1,18 +1,22 @@
-import os
 import re
+import unicodedata
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# Page configuration
+
+# ---------------------------------------------------------------------
+# Configuração da página
+# ---------------------------------------------------------------------
 st.set_page_config(
     page_title="InsightDoc-ETL | Hospital Analytics & Limpezas",
     page_icon="🏥",
     layout="wide",
 )
 
-# Injeção de CSS Customizado para cartões coloridos modernos
 st.markdown(
     """
     <style>
@@ -38,495 +42,730 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Função vetorizada para mapear setores baseada nos leitos
+
+# ---------------------------------------------------------------------
+# Funções auxiliares de leitura e identificação
+# ---------------------------------------------------------------------
+def normalizar_texto(valor):
+    """Remove acentos e espaços extras para comparar rótulos."""
+    if pd.isna(valor):
+        return ""
+    texto = str(valor).strip().upper()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", texto)
+
+
+def encontrar_coluna(colunas, termos):
+    """Encontra uma coluna pelo nome, sem depender de maiúsculas/minúsculas."""
+    for coluna in colunas:
+        nome = normalizar_texto(coluna)
+        if any(termo in nome for termo in termos):
+            return coluna
+    return None
+
+
 def identificar_setor_serie(leitos_series):
-    leitos_upper = leitos_series.fillna("PA").astype(str).str.strip().str.upper()
-    
-    setores = pd.Series("PA (Pronto Atendimento)", index=leitos_series.index)
-    num_leitos = leitos_upper.str.extract(r'(\d+)', expand=False).astype(float)
-    
-    setores[leitos_upper.str.contains("OBS M|OBS F|EXTRA|ESTAB|MED|EX", na=False)] = "PA (Pronto Atendimento)"
-    
-    setores[(num_leitos >= 101) & (num_leitos <= 112)] = "Semi intensiva (1 andar)"
-    setores[(num_leitos >= 113) & (num_leitos <= 122)] = "Hospital dia (1 andar)"
-    setores[(num_leitos >= 200) & (num_leitos <= 299)] = "Clínica Médica (2 andar)"
-    setores[(num_leitos >= 301) & (num_leitos <= 310)] = "Clínica cirúrgica 1 (3 andar)"
-    setores[(num_leitos >= 311) & (num_leitos <= 320)] = "Clínica cirúrgica pediátrica (3 andar)"
-    setores[(num_leitos >= 321) & (num_leitos <= 330)] = "UTI 1 (3 andar)"
-    setores[(num_leitos >= 331) & (num_leitos <= 340)] = "UTI 5 (3 andar)"
-    setores[(num_leitos >= 341) & (num_leitos <= 350)] = "UTI Pediátrica (3 andar)"
-    setores[(num_leitos >= 401) & (num_leitos <= 420)] = "Clínica cirúrgica 2 (4 andar)"
-    setores[(num_leitos >= 421) & (num_leitos <= 430)] = "UTI 2 (4 andar)"
-    setores[(num_leitos >= 431) & (num_leitos <= 440)] = "UTI 3 (4 andar)"
-    setores[(num_leitos >= 441) & (num_leitos <= 450)] = "UTI 4 (4 andar)"
-    setores[(num_leitos >= 501) & (num_leitos <= 520)] = "Clínica cirúrgica 3 (5 andar)"
-    
+    """
+    Classificação de reserva pelo número do leito.
+    É usada somente quando a planilha não informa a Unidade de Internação.
+    """
+    leitos = leitos_series.fillna("").astype(str).str.strip().str.upper()
+    numeros = leitos.str.extract(r"(\d+)", expand=False)
+    numeros = pd.to_numeric(numeros, errors="coerce")
+
+    setores = pd.Series("PA (Pronto Atendimento)", index=leitos_series.index, dtype="object")
+    setores.loc[(numeros >= 101) & (numeros <= 112)] = "Semi intensiva (1 andar)"
+    setores.loc[(numeros >= 113) & (numeros <= 122)] = "Hospital dia (1 andar)"
+    setores.loc[(numeros >= 200) & (numeros <= 299)] = "Clínica Médica (2 andar)"
+    setores.loc[(numeros >= 301) & (numeros <= 310)] = "Clínica cirúrgica 1 (3 andar)"
+    setores.loc[(numeros >= 311) & (numeros <= 320)] = "Clínica cirúrgica pediátrica (3 andar)"
+    setores.loc[(numeros >= 321) & (numeros <= 330)] = "UTI 1 (3 andar)"
+    setores.loc[(numeros >= 331) & (numeros <= 340)] = "UTI 5 (3 andar)"
+    setores.loc[(numeros >= 341) & (numeros <= 350)] = "UTI Pediátrica (3 andar)"
+    setores.loc[(numeros >= 401) & (numeros <= 420)] = "Clínica cirúrgica 2 (4 andar)"
+    setores.loc[(numeros >= 421) & (numeros <= 430)] = "UTI 2 (4 andar)"
+    setores.loc[(numeros >= 431) & (numeros <= 440)] = "UTI 3 (4 andar)"
+    setores.loc[(numeros >= 441) & (numeros <= 450)] = "UTI 4 (4 andar)"
+    setores.loc[(numeros >= 501) & (numeros <= 520)] = "Clínica cirúrgica 3 (5 andar)"
     return setores
 
-# Função vetorizada para classificar o turno com base na hora
-def identificar_turno_serie(horas_series):
-    horas_str = horas_series.fillna("").astype(str).str.strip()
-    turnos = pd.Series("Não Especificado", index=horas_series.index)
-    
-    match_hora = horas_str.str.extract(r'(\d{2}):(\d{2})', expand=True)
-    valido = match_hora[0].notna()
-    
-    if valido.any():
-        h_num = match_hora[0][valido].astype(int)
-        m_num = match_hora[1][valido].astype(int)
-        total_min = h_num * 60 + m_num
-        
-        diurno = (total_min >= 420) & (total_min <= 1140) # 07:00 a 19:00
-        turnos[valido & diurno] = "Diurno (07:00 - 19:00)"
-        turnos[valido & ~diurno] = "Noturno"
-        
-    return turnos
 
-# Função de processamento robusta adaptada ao formato real do CSV/Excel do hospital
+def extrair_horas_por_linha(df_raw, coluna_hora=None):
+    """
+    Procura o horário em cada registro.
+    Isso permite ler planilhas que juntam blocos com colunas em posições diferentes.
+    """
+    padrao_hora = r"(?<!\d)((?:[01]?\d|2[0-3]):[0-5]\d)(?!\d)"
+    horas = pd.Series("", index=df_raw.index, dtype="object")
+
+    colunas_busca = []
+    if coluna_hora and coluna_hora in df_raw.columns:
+        colunas_busca.append(coluna_hora)
+    colunas_busca.extend(c for c in df_raw.columns if c not in colunas_busca)
+
+    for coluna in colunas_busca:
+        extraida = (
+            df_raw[coluna]
+            .fillna("")
+            .astype(str)
+            .str.extract(padrao_hora, expand=False)
+            .fillna("")
+        )
+        horas = horas.mask(horas.eq(""), extraida)
+
+    return horas
+
+
+def extrair_tipo_limpeza_por_linha(df_raw):
+    """
+    Identifica o tipo em qualquer coluna da linha.
+    O CSV de referência contém blocos em que o campo Tipo de Limpeza muda
+    de posição; por isso, não se pode interromper a busca na primeira coluna.
+    """
+    tipo = pd.Series("", index=df_raw.index, dtype="object")
+    posicao_tipo = pd.Series(-1, index=df_raw.index, dtype="int64")
+
+    for posicao, coluna in enumerate(df_raw.columns):
+        valores = df_raw[coluna].fillna("").astype(str).str.upper().str.strip()
+        valores = valores.str.replace(r"\s+", " ", regex=True)
+
+        concorrente = valores.str.contains(r"\bCONCORRENTE\b", regex=True, na=False)
+        terminal_quarto = (
+            valores.str.contains(r"\bTERMINAL\b", regex=True, na=False)
+            & valores.str.contains(r"\bQUART", regex=True, na=False)
+        )
+        terminal_leito = valores.str.contains(r"\bTERMINAL\b", regex=True, na=False) & ~terminal_quarto
+        pontual = valores.str.contains(r"\bPONTUAL\b", regex=True, na=False)
+
+        # Uma linha recebe somente a primeira classificação reconhecida.
+        for mascara, classificacao in (
+            (concorrente, "CONCORRENTE"),
+            (terminal_quarto, "TERMINAL DE QUARTO"),
+            (terminal_leito, "TERMINAL DE LEITO"),
+            (pontual, "LIMPEZA PONTUAL"),
+        ):
+            aplicar = tipo.eq("") & mascara
+            tipo.loc[aplicar] = classificacao
+            posicao_tipo.loc[aplicar] = posicao
+
+    tipo = tipo.mask(tipo.eq(""), "Não Identificado")
+    return tipo, posicao_tipo
+
+
+def extrair_proximo_valor(df_raw, posicoes_ancora, linhas_validas):
+    """Retorna o primeiro campo preenchido à direita de uma coluna-âncora."""
+    matriz = df_raw.fillna("").astype(str).to_numpy()
+    resultado = [""] * len(df_raw)
+
+    for i in linhas_validas:
+        posicao = int(posicoes_ancora.iloc[i])
+        if posicao < 0:
+            continue
+        for j in range(posicao + 1, matriz.shape[1]):
+            valor = matriz[i, j].strip()
+            if valor and valor.lower() != "nan":
+                resultado[i] = valor
+                break
+
+    return pd.Series(resultado, index=df_raw.index, dtype="object")
+
+
+def extrair_unidade_do_relatorio(df_raw):
+    """
+    O relatório pode trazer a unidade em uma linha de cabeçalho
+    ('Unidade de Internação :'). A unidade é propagada até o próximo cabeçalho.
+    """
+    marcadores = pd.Series(False, index=df_raw.index)
+    for coluna in df_raw.columns:
+        texto = df_raw[coluna].fillna("").astype(str).apply(normalizar_texto)
+        marcadores |= texto.str.contains("UNIDADE DE INTERNACAO", regex=False)
+
+    unidades_cabecalho = pd.Series("", index=df_raw.index, dtype="object")
+    matriz = df_raw.fillna("").astype(str).to_numpy()
+
+    for i in marcadores[marcadores].index:
+        linha = matriz[df_raw.index.get_loc(i)]
+        pos_marcador = next(
+            (j for j, valor in enumerate(linha)
+             if "UNIDADE DE INTERNACAO" in normalizar_texto(valor)),
+            -1,
+        )
+        if pos_marcador >= 0:
+            valor_unidade = next(
+                (
+                    valor.strip()
+                    for valor in linha[pos_marcador + 1:]
+                    if valor.strip() and valor.strip().lower() != "nan"
+                ),
+                "",
+            )
+            if valor_unidade:
+                unidades_cabecalho.loc[i] = valor_unidade
+
+    return unidades_cabecalho.replace("", pd.NA).ffill()
+
+
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
+    """Lê CSV/Excel e normaliza os registros sem depender de posições fixas."""
     nome_arquivo = uploaded_file.name.lower()
-    
+
     try:
-        if nome_arquivo.endswith('.csv'):
-            for enc in ['latin1', 'utf-8', 'cp1252', 'iso-8859-1']:
+        if nome_arquivo.endswith(".csv"):
+            df_raw = None
+            erros = []
+            for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin1"):
                 try:
                     uploaded_file.seek(0)
-                    df_raw = pd.read_csv(uploaded_file, encoding=enc, sep=None, engine='python', dtype=str, nrows=300000)
+                    df_raw = pd.read_csv(
+                        uploaded_file,
+                        encoding=encoding,
+                        sep=None,
+                        engine="python",
+                        dtype=str,
+                        nrows=300000,
+                    )
                     break
-                except Exception:
-                    continue
+                except Exception as erro:
+                    erros.append(str(erro))
+            if df_raw is None:
+                raise ValueError("Não foi possível identificar a codificação do CSV.")
         else:
-            df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str, engine="openpyxl")
-    except Exception as e:
-        st.error(f"Erro ao ler o arquivo {uploaded_file.name}: {e}")
+            uploaded_file.seek(0)
+            df_raw = pd.read_excel(uploaded_file, sheet_name=0, dtype=str)
+
+    except Exception as erro:
+        st.error(f"Erro ao ler o arquivo {uploaded_file.name}: {erro}")
         return pd.DataFrame()
-    
-    df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
-    
-    # 1. Identificação exata das colunas baseada na estrutura real do relatório hospitalar
-    col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
-    
-    col_leito = "LEITO" if "LEITO" in df_raw.columns else next((c for c in df_raw.columns if "LEITO" in c), df_raw.columns[10] if len(df_raw.columns) > 10 else None)
-    col_hora = "HORA" if "HORA" in df_raw.columns else next((c for c in df_raw.columns if "HORA" in c), df_raw.columns[9] if len(df_raw.columns) > 9 else None)
-    
-    # Coluna exclusiva do colaborador (procura por Unnamed: 13 ou colunas de funcionário, evitando paciente)
-    col_func = None
-    for c in df_raw.columns:
-        if any(k in c for k in ["FUNCIONARIO", "COLABORADOR", "RESPONSAVEL", "EXECUTANTE", "OPERADOR", "FUNCIONÁRIO", "UNNAMED: 13"]):
-            if "PACIENTE" not in c:
-                amostra = df_raw[c].dropna()
-                if not amostra.empty and not amostra.str.contains("SOLICITA|LEITO|TIPO", case=False).any():
-                    col_func = c
-                    break
-                    
-    # Se ainda não encontrou, pega por defeito a última coluna do dataframe (que contém os nomes dos colaboradores no CSV)
-    if not col_func and len(df_raw.columns) > 1:
-        col_func = df_raw.columns[-1]
 
-    solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
-    
-    # Extração de Hora
-    hora = pd.Series("", index=df_raw.index)
-    if col_hora and col_hora in df_raw.columns:
-        hora = df_raw[col_hora].fillna("").astype(str).str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
-    
-    if (hora == "").all():
-        for col in df_raw.columns:
-            amostra = df_raw[col].fillna("").astype(str).str.strip()
-            if amostra.str.contains(r'\d{2}:\d{2}', na=False).any():
-                hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
+    if df_raw.empty or len(df_raw.columns) == 0:
+        st.warning(f"O arquivo {uploaded_file.name} está vazio.")
+        return pd.DataFrame()
+
+    df_raw.columns = [str(coluna).strip() for coluna in df_raw.columns]
+
+    # Solicitação: usa o cabeçalho quando disponível; caso contrário, primeira coluna.
+    col_solicitacao = encontrar_coluna(df_raw.columns, ["SOLICITA", "REGISTRO"])
+    if col_solicitacao is None:
+        col_solicitacao = df_raw.columns[0]
+
+    solicitacao = (
+        df_raw[col_solicitacao]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\.0+$", "", regex=True)
+    )
+    linhas_validas_mask = solicitacao.str.fullmatch(r"\d+", na=False)
+    linhas_validas = list(linhas_validas_mask[linhas_validas_mask].index)
+
+    if not linhas_validas:
+        st.warning(f"Nenhuma solicitação numérica foi encontrada em {uploaded_file.name}.")
+        return pd.DataFrame()
+
+    # Tipo de limpeza: procura o valor na linha inteira, pois o CSV alterna layouts.
+    tipo_limpeza, pos_tipo = extrair_tipo_limpeza_por_linha(df_raw)
+
+    # Hora: primeiro tenta a coluna nomeada e depois todas as outras colunas.
+    col_hora = encontrar_coluna(df_raw.columns, ["HORA"])
+    hora = extrair_horas_por_linha(df_raw, col_hora)
+
+    # Leito: no relatório de referência, o leito é o primeiro campo após a hora.
+    pos_hora = pd.Series(-1, index=df_raw.index, dtype="int64")
+    padrao_hora = re.compile(r"(?<!\d)((?:[01]?\d|2[0-3]):[0-5]\d)(?!\d)")
+    matriz = df_raw.fillna("").astype(str).to_numpy()
+    for i in linhas_validas:
+        for j, valor in enumerate(matriz[i]):
+            if padrao_hora.search(valor):
+                pos_hora.iloc[i] = j
                 break
 
-    # Extração de Leito
-    leito = pd.Series("PA", index=df_raw.index)
-    if col_leito and col_leito in df_raw.columns:
-        leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
-        leito = leito.replace(["nan", "NAN", "NaN", ""], "PA")
-    
-    if (leito == "PA").all():
-        for col in df_raw.columns:
-            amostra = df_raw[col].fillna("").astype(str).str.upper()
-            if amostra.str.contains("LEITO|QUARTO|EXTRA|OBS|ESTAB", na=False).any():
-                leito = df_raw[col].fillna("PA").astype(str).str.strip()
-                break
+    leito = extrair_proximo_valor(df_raw, pos_hora, linhas_validas)
+    col_leito = encontrar_coluna(df_raw.columns, ["LEITO"])
+    if col_leito:
+        valor_nomeado = df_raw[col_leito].fillna("").astype(str).str.strip()
+        # Quando a coluna Leito está preenchida, ela é mais confiável que a posição.
+        # No CSV de referência, os blocos deslocados ficam vazios nessa coluna;
+        # nesses casos, usamos o valor encontrado após o horário.
+        leito = valor_nomeado.mask(valor_nomeado.eq(""), leito)
+    leito = leito.replace(["nan", "NAN", "NaN"], "")
 
-    # Extração rigorosa do Colaborador (Garantindo que venha apenas da coluna de executantes e nunca do paciente)
-    colaborador = pd.Series("Não Informado", index=df_raw.index)
-    if col_func and col_func in df_raw.columns:
-        colaborador = df_raw[col_func].fillna("Não Informado").astype(str).str.strip()
-        colaborador = colaborador.replace(["nan", "NAN", "NaN", ""], "Não Informado")
+    # Colaborador: é o primeiro campo preenchido depois do tipo de limpeza.
+    colaborador = extrair_proximo_valor(df_raw, pos_tipo, linhas_validas)
+    col_funcionario = encontrar_coluna(
+        df_raw.columns,
+        ["FUNCIONARIO", "COLABORADOR", "EXECUTANTE", "RESPONSAVEL", "OPERADOR"],
+    )
+    if col_funcionario:
+        valor_nomeado = df_raw[col_funcionario].fillna("").astype(str).str.strip()
+        colaborador = valor_nomeado.mask(valor_nomeado.eq(""), colaborador)
+    colaborador = colaborador.replace(["nan", "NAN", "NaN", ""], "Não Informado")
 
-    # Extração de Tipo de Limpeza
-    tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_raw.index)
-    for col in df_raw.columns:
-        amostra = df_raw[col].fillna("").astype(str).str.upper()
-        if amostra.str.contains("CONCORRENTE|TERMINAL", na=False).any():
-            tipo_limpeza = amostra.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
-            break
+    # Unidade real do cabeçalho do relatório; se não existir, usa a classificação pelo leito.
+    unidade = extrair_unidade_do_relatorio(df_raw)
+    col_unidade = encontrar_coluna(df_raw.columns, ["UNIDADE DE INTERNACAO", "SETOR"])
+    if col_unidade:
+        unidade_coluna = df_raw[col_unidade].fillna("").astype(str).str.strip()
+        unidade = unidade_coluna.mask(unidade_coluna.eq(""), unidade)
+    setor_por_leito = identificar_setor_serie(leito)
+    unidade = unidade.fillna("").astype(str).str.strip()
+    unidade = unidade.mask(unidade.eq(""), setor_por_leito)
+    unidade = unidade.replace("", "Não Informado")
 
-    df_final = pd.DataFrame({
-        "Origem / Período": nome_origem,
-        "Solicitação": solicitacao,
-        "Hora": hora,
-        "Turno": identificar_turno_serie(hora),
-        "Leito": leito,
-        "Tipo de Limpeza": tipo_limpeza,
-        "Colaborador": colaborador,
-        "Unidade de Internação": identificar_setor_serie(leito),
-    })
+    resultado = pd.DataFrame(
+        {
+            "Origem / Período": nome_origem,
+            "Solicitação": solicitacao,
+            "Hora": hora,
+            "Turno": identificar_turno_serie(hora),
+            "Leito": leito.replace("", "Não Informado"),
+            "Tipo de Limpeza": tipo_limpeza,
+            "Colaborador": colaborador,
+            "Unidade de Internação": unidade,
+        },
+        index=df_raw.index,
+    )
 
-    # Filtro rigoroso para manter apenas as linhas de dados válidas
-    df_final = df_final[
-        (df_final["Solicitação"] != "") & 
-        (df_final["Solicitação"].str.match(r'^\d+$', na=False))
-    ].copy()
-    
-    return df_final
+    resultado = resultado.loc[linhas_validas_mask].copy()
+    return resultado.reset_index(drop=True)
 
-# Main Title & Header
-st.title("🏥 InsightDoc-ETL: Gestão Hospitalar & Comparador de Limpezas")
+
+def identificar_turno_serie(horas_series):
+    """Diurno das 07:00 às 19:00; demais horários são noturnos."""
+    horas = horas_series.fillna("").astype(str).str.strip()
+    turnos = pd.Series("Não Especificado", index=horas_series.index, dtype="object")
+
+    match = horas.str.extract(r"^(\d{1,2}):(\d{2})", expand=True)
+    valido = match[0].notna() & match[1].notna()
+
+    if valido.any():
+        hora_num = pd.to_numeric(match.loc[valido, 0], errors="coerce")
+        minuto_num = pd.to_numeric(match.loc[valido, 1], errors="coerce")
+        total_minutos = hora_num * 60 + minuto_num
+        diurno = (total_minutos >= 7 * 60) & (total_minutos <= 19 * 60)
+        turnos.loc[diurno[diurno].index] = "Diurno (07:00 - 19:00)"
+        turnos.loc[diurno[~diurno].index] = "Noturno"
+
+    return turnos
+
+
+def formatar_numero(valor):
+    return f"{int(valor):,}".replace(",", ".")
+
+
+def formatar_diferenca(valor):
+    sinal = "+" if valor > 0 else ""
+    return f"{sinal}{formatar_numero(valor)}"
+
+
+# ---------------------------------------------------------------------
+# Interface
+# ---------------------------------------------------------------------
+st.title("InsightDoc-ETL: Gestão Hospitalar & Comparador de Limpezas")
 st.markdown("---")
-
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** para realizar análises isoladas ou uma **comparação lado a lado**."
+    "Envie uma ou duas planilhas para analisar os registros separadamente "
+    "ou comparar os períodos lado a lado."
 )
 
 col_up1, col_up2 = st.columns(2)
 with col_up1:
-    arquivo_1 = st.file_uploader("📂 Enviar 1ª Planilha (Ex: Período A)", type=["xlsx", "xls", "csv"], key="file1")
+    arquivo_1 = st.file_uploader(
+        "Enviar 1ª Planilha (Ex.: Período A)",
+        type=["xlsx", "xls", "csv"],
+        key="file1",
+    )
 with col_up2:
-    arquivo_2 = st.file_uploader("📂 Enviar 2ª Planilha (Opcional - Ex: Período B)", type=["xlsx", "xls", "csv"], key="file2")
+    arquivo_2 = st.file_uploader(
+        "Enviar 2ª Planilha (Opcional - Ex.: Período B)",
+        type=["xlsx", "xls", "csv"],
+        key="file2",
+    )
 
 dfs_combinados = []
 
 if arquivo_1 is not None:
-    with st.spinner("A processar a 1ª planilha..."):
+    with st.spinner("Processando a 1ª planilha..."):
         df1 = processar_relatorio_limpeza(arquivo_1, "Planilha 1 (A)")
         if not df1.empty:
             dfs_combinados.append(df1)
 
 if arquivo_2 is not None:
-    with st.spinner("A processar a 2ª planilha..."):
+    with st.spinner("Processando a 2ª planilha..."):
         df2 = processar_relatorio_limpeza(arquivo_2, "Planilha 2 (B)")
         if not df2.empty:
             dfs_combinados.append(df2)
 
-if len(dfs_combinados) > 0:
+if not dfs_combinados:
+    st.info("Envie pelo menos uma planilha (Excel ou CSV) para iniciar as análises.")
+else:
     df_limpeza = pd.concat(dfs_combinados, ignore_index=True)
 
-    if df_limpeza.empty:
-        st.warning("⚠️ Não foram encontrados registros estruturados nas planilhas enviadas.")
-    else:
-        st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza):,}".replace(",", "."))
+    st.success(
+        f"Dados processados: {formatar_numero(len(df_limpeza))} registros válidos."
+    )
 
-        # Filtros Globais
-        col_f1, col_f2, col_f3 = st.columns(3)
-        with col_f1:
-            unidades_disponiveis = ["Todas"] + list(df_limpeza["Unidade de Internação"].unique())
-            unidade_filtro = st.selectbox("Filtrar por Unidade de Internação", unidades_disponiveis)
-        with col_f2:
-            tipos_disponiveis = ["Todos"] + list(df_limpeza["Tipo de Limpeza"].unique())
-            tipo_filtro = st.selectbox("Filtrar por Tipo de Limpeza", tipos_disponiveis)
-        with col_f3:
-            turnos_disponiveis = ["Todos"] + list(df_limpeza["Turno"].unique())
-            turno_filtro = st.selectbox("Filtrar por Turno", turnos_disponiveis)
+    nao_identificados = int(
+        df_limpeza["Tipo de Limpeza"].eq("Não Identificado").sum()
+    )
+    if nao_identificados:
+        st.warning(
+            f"{formatar_numero(nao_identificados)} registros não tiveram o tipo "
+            "de limpeza reconhecido. Eles aparecem como 'Não Identificado' "
+            "em vez de serem classificados incorretamente como terminais."
+        )
 
-        df_filtrado = df_limpeza.copy()
-        if unidade_filtro != "Todas":
-            df_filtrado = df_filtrado[df_filtrado["Unidade de Internação"] == unidade_filtro]
-        if tipo_filtro != "Todos":
-            df_filtrado = df_filtrado[df_filtrado["Tipo de Limpeza"] == tipo_filtro]
-        if turno_filtro != "Todos":
-            df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
+    # Os filtros partem sempre da base completa e são combinados entre si.
+    st.subheader("Filtros")
+    col_f1, col_f2, col_f3 = st.columns(3)
 
-        # 1. MÉTRICAS COLORIDAS E COMPARATIVO DE DIFERENÇAS
-        st.markdown("### 📊 Métricas por Planilha & Comparativo")
-        origens_presentes = df_filtrado["Origem / Período"].unique()
-        
-        valores_metricas = {}
+    unidades_disponiveis = sorted(
+        df_limpeza["Unidade de Internação"].dropna().astype(str).unique().tolist()
+    )
+    tipos_preferidos = [
+        "CONCORRENTE",
+        "TERMINAL DE LEITO",
+        "TERMINAL DE QUARTO",
+        "LIMPEZA PONTUAL",
+        "Não Identificado",
+    ]
+    tipos_presentes = df_limpeza["Tipo de Limpeza"].dropna().unique().tolist()
+    tipos_disponiveis = [t for t in tipos_preferidos if t in tipos_presentes]
+    tipos_disponiveis += sorted(t for t in tipos_presentes if t not in tipos_disponiveis)
 
-        cols_met = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
-        for i, orig in enumerate(origens_presentes):
-            df_orig = df_filtrado[df_filtrado["Origem / Período"] == orig]
-            tot = len(df_orig)
-            term = len(df_orig[df_orig["Tipo de Limpeza"].str.contains("TERMINAL", case=False, na=False)])
-            conc = len(df_orig[df_orig["Tipo de Limpeza"].str.contains("CONCORRENTE", case=False, na=False)])
-            
-            valores_metricas[orig] = {"Total": tot, "Terminais": term, "Concorrentes": conc}
-            
-            css_class = "metric-card-1" if i == 0 else "metric-card-2"
-            
-            with cols_met[i]:
-                st.markdown(f"**📌 {orig}**")
-                st.markdown(f"""
-                <div class="{css_class}">
-                    <div style="display: flex; justify-content: space-between;">
-                        <div><span style="font-size: 13px; color: #555;">Total</span><br><b style="font-size: 24px;">{tot:,}</b></div>
-                        <div><span style="font-size: 13px; color: #555;">Terminais</span><br><b style="font-size: 24px;">{term:,}</b></div>
-                        <div><span style="font-size: 13px; color: #555;">Concorrentes</span><br><b style="font-size: 24px;">{conc:,}</b></div>
+    turnos_preferidos = [
+        "Diurno (07:00 - 19:00)",
+        "Noturno",
+        "Não Especificado",
+    ]
+    turnos_presentes = df_limpeza["Turno"].dropna().unique().tolist()
+    turnos_disponiveis = [t for t in turnos_preferidos if t in turnos_presentes]
+    turnos_disponiveis += sorted(t for t in turnos_presentes if t not in turnos_disponiveis)
+
+    with col_f1:
+        unidade_filtro = st.selectbox(
+            "Unidade de Internação",
+            ["Todas"] + unidades_disponiveis,
+            key="filtro_unidade",
+        )
+    with col_f2:
+        tipo_filtro = st.selectbox(
+            "Tipo de Limpeza",
+            ["Todos"] + tipos_disponiveis,
+            key="filtro_tipo",
+        )
+    with col_f3:
+        turno_filtro = st.selectbox(
+            "Turno",
+            ["Todos"] + turnos_disponiveis,
+            key="filtro_turno",
+        )
+
+    df_filtrado = df_limpeza.copy()
+    if unidade_filtro != "Todas":
+        df_filtrado = df_filtrado[
+            df_filtrado["Unidade de Internação"] == unidade_filtro
+        ]
+    if tipo_filtro != "Todos":
+        df_filtrado = df_filtrado[
+            df_filtrado["Tipo de Limpeza"] == tipo_filtro
+        ]
+    if turno_filtro != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Turno"] == turno_filtro]
+
+    st.caption(
+        f"Exibindo {formatar_numero(len(df_filtrado))} de "
+        f"{formatar_numero(len(df_limpeza))} registros. "
+        "Os filtros de unidade, tipo e turno são aplicados em conjunto."
+    )
+    st.markdown("---")
+
+    origens_presentes = df_limpeza["Origem / Período"].drop_duplicates().tolist()
+
+    # -----------------------------------------------------------------
+    # Métricas por planilha
+    # -----------------------------------------------------------------
+    st.markdown("### Métricas por Planilha & Comparativo")
+    valores_metricas = {}
+    cols_met = st.columns(max(1, len(origens_presentes)))
+
+    for i, origem in enumerate(origens_presentes):
+        df_origem = df_filtrado[df_filtrado["Origem / Período"] == origem]
+        total = len(df_origem)
+        terminais = int(
+            df_origem["Tipo de Limpeza"].str.startswith("TERMINAL", na=False).sum()
+        )
+        concorrentes = int(
+            df_origem["Tipo de Limpeza"].eq("CONCORRENTE").sum()
+        )
+        valores_metricas[origem] = {
+            "Total": total,
+            "Terminais": terminais,
+            "Concorrentes": concorrentes,
+        }
+
+        classe = "metric-card-1" if i == 0 else "metric-card-2"
+        with cols_met[i]:
+            st.markdown(f"**{origem}**")
+            st.markdown(
+                f"""
+                <div class="{classe}">
+                    <div style="display:flex; justify-content:space-between; gap:8px;">
+                        <div><span style="font-size:13px;color:#555;">Total</span><br>
+                            <b style="font-size:23px;">{formatar_numero(total)}</b></div>
+                        <div><span style="font-size:13px;color:#555;">Terminais</span><br>
+                            <b style="font-size:23px;">{formatar_numero(terminais)}</b></div>
+                        <div><span style="font-size:13px;color:#555;">Concorrentes</span><br>
+                            <b style="font-size:23px;">{formatar_numero(concorrentes)}</b></div>
                     </div>
                 </div>
-                """.replace(",", "."), unsafe_allow_html=True)
+                """,
+                unsafe_allow_html=True,
+            )
 
-        if len(origens_presentes) == 2:
-            p1, p2 = origens_presentes[0], origens_presentes[1]
-            m1, m2 = valores_metricas[p1], valores_metricas[p2]
-            
-            diff_tot = m2["Total"] - m1["Total"]
-            pct_tot = (diff_tot / m1["Total"] * 100) if m1["Total"] > 0 else 0
-            
-            diff_term = m2["Terminais"] - m1["Terminais"]
-            pct_term = (diff_term / m1["Terminais"] * 100) if m1["Terminais"] > 0 else 0
-            
-            diff_conc = m2["Concorrentes"] - m1["Concorrentes"]
-            pct_conc = (diff_conc / m1["Concorrentes"] * 100) if m1["Concorrentes"] > 0 else 0
-            
-            sinal_tot = "+" if diff_tot > 0 else ""
-            sinal_term = "+" if diff_term > 0 else ""
-            sinal_conc = "+" if diff_conc > 0 else ""
-            
-            sinal_pct_tot = "+" if pct_tot > 0 else ""
-            sinal_pct_term = "+" if pct_term > 0 else ""
-            sinal_pct_conc = "+" if pct_conc > 0 else ""
+    if len(origens_presentes) == 2:
+        origem_a, origem_b = origens_presentes
+        met_a = valores_metricas[origem_a]
+        met_b = valores_metricas[origem_b]
 
-            st.markdown(f"""
-            <div style="background-color: #f8f9fa; padding: 14px; border-radius: 10px; border: 1px solid #ddd; margin-top: 12px;">
-                <b style="color: #333;">📈 Diferença ({p2} vs {p1}):</b>
-                <div style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 14px;">
-                    <div><b>Total:</b> {sinal_tot}{diff_tot:,} ({sinal_pct_tot}{pct_tot:.2f}%)</div>
-                    <div><b>Terminais:</b> {sinal_term}{diff_term:,} ({sinal_pct_term}{pct_term:.2f}%)</div>
-                    <div><b>Concorrentes:</b> {sinal_conc}{diff_conc:,} ({sinal_pct_conc}{pct_conc:.2f}%)</div>
+        itens_diferenca = []
+        for chave, rotulo in (
+            ("Total", "Total"),
+            ("Terminais", "Terminais"),
+            ("Concorrentes", "Concorrentes"),
+        ):
+            diferenca = met_b[chave] - met_a[chave]
+            base = met_a[chave]
+            percentual = (diferenca / base * 100) if base else None
+            percentual_txt = f" ({percentual:+.1f}%)" if percentual is not None else " (base zero)"
+            itens_diferenca.append(
+                f"<div><b>{rotulo}:</b> {formatar_diferenca(diferenca)}{percentual_txt}</div>"
+            )
+
+        st.markdown(
+            f"""
+            <div style="background-color:#f8f9fa;padding:14px;border-radius:10px;
+                        border:1px solid #ddd;margin-top:12px;">
+                <b>Diferença ({origem_b} vs. {origem_a}):</b>
+                <div style="display:flex;justify-content:space-around;gap:12px;
+                            flex-wrap:wrap;margin-top:8px;font-size:14px;">
+                    {''.join(itens_diferenca)}
                 </div>
             </div>
-            """.replace(",", "."), unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True,
+        )
 
-        st.markdown("---")
+    st.markdown("---")
 
-        # 2. GRÁFICOS DE PIZZA SEPARADOS
-        st.subheader("Proporção por Tipo de Limpeza (Separado por Planilha)")
-        cols_pizza = st.columns(len(origens_presentes) if len(origens_presentes) > 0 else 1)
+    if df_filtrado.empty:
+        st.warning(
+            "Nenhum registro corresponde à combinação de filtros selecionada. "
+            "Altere um ou mais filtros para visualizar os gráficos."
+        )
+    else:
+        # -------------------------------------------------------------
+        # Gráfico de pizza por tipo de limpeza e por planilha
+        # -------------------------------------------------------------
+        st.subheader("Proporção por Tipo de Limpeza (separado por planilha)")
+        cols_pizza = st.columns(max(1, len(origens_presentes)))
+
         for i, origem in enumerate(origens_presentes):
             with cols_pizza[i]:
-                df_origem = df_filtrado[df_filtrado["Origem / Período"] == origem]
-                tipo_counts = df_origem["Tipo de Limpeza"].value_counts().reset_index()
-                tipo_counts.columns = ["Tipo de Limpeza", "Quantidade"]
-                
-                fig_p = px.pie(
+                df_origem = df_filtrado[
+                    df_filtrado["Origem / Período"] == origem
+                ]
+                if df_origem.empty:
+                    st.info(f"Sem registros para {origem} com esses filtros.")
+                    continue
+
+                tipo_counts = (
+                    df_origem["Tipo de Limpeza"]
+                    .value_counts()
+                    .rename_axis("Tipo de Limpeza")
+                    .reset_index(name="Quantidade")
+                )
+                fig_pizza = px.pie(
                     tipo_counts,
                     names="Tipo de Limpeza",
                     values="Quantidade",
                     title=f"Distribuição - {origem}",
-                    color_discrete_sequence=["#FF5733", "#2980B9"]
+                    color_discrete_sequence=["#2980B9", "#E67E22", "#27AE60", "#8E44AD"],
                 )
-                fig_p.update_layout(height=400, font=dict(size=13), title_font=dict(size=15))
-                st.plotly_chart(fig_p, use_container_width=True)
+                fig_pizza.update_layout(height=400, font=dict(size=13))
+                st.plotly_chart(fig_pizza, use_container_width=True)
 
         st.markdown("---")
 
-        # 3. GRÁFICO DE BARRAS COM CORES DINÂMICAS NA DIFERENÇA
-        st.subheader("Volume por Unidade de Internação (Comparativo)")
-        
-        col_ord1, col_ord2 = st.columns([2, 4])
+        # -------------------------------------------------------------
+        # Gráfico de barras por unidade
+        # -------------------------------------------------------------
+        st.subheader("Volume por Unidade de Internação (comparativo)")
+        col_ord1, _ = st.columns([2, 4])
         with col_ord1:
             criterio_ordenacao = st.selectbox(
-                "Ordenar setores por:",
-                ["Maior Diferença Absoluta (Planilhas)", "Maior Volume Geral"]
+                "Ordenar unidades por:",
+                [
+                    "Maior Diferença Absoluta (Planilhas)",
+                    "Maior Volume Geral",
+                ],
+                key="criterio_ordenacao",
             )
 
-        if len(origens_presentes) == 2:
-            p_a, p_b = origens_presentes[0], origens_presentes[1]
-            pivot_unidades = df_filtrado.pivot_table(index="Unidade de Internação", columns="Origem / Período", values="Solicitação", aggfunc="count").fillna(0)
-            
-            if p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
-                pivot_unidades["Diff_Abs"] = pivot_unidades[p_b] - pivot_unidades[p_a]
-                pivot_unidades["Diff_Pct"] = (pivot_unidades["Diff_Abs"] / pivot_unidades[p_a].replace(0, 1)) * 100
-                pivot_unidades["Abs_Diff"] = pivot_unidades["Diff_Abs"].abs()
-                
-                if criterio_ordenacao == "Maior Diferença Absoluta (Planilhas)":
-                    ordem_unidades = pivot_unidades.sort_values(by="Abs_Diff", ascending=False).index.tolist()
-                else:
-                    pivot_unidades["Total_Vol"] = pivot_unidades[p_a] + pivot_unidades[p_b]
-                    ordem_unidades = pivot_unidades.sort_values(by="Total_Vol", ascending=False).index.tolist()
-            else:
-                ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
-        else:
-            ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
+        contagem_unidades = (
+            df_filtrado.groupby(
+                ["Unidade de Internação", "Origem / Período"],
+                as_index=False,
+            )
+            .size()
+            .rename(columns={"size": "Quantidade"})
+        )
 
-        fig_unidade = px.histogram(
-            df_filtrado,
+        pivot_unidades = contagem_unidades.pivot(
+            index="Unidade de Internação",
+            columns="Origem / Período",
+            values="Quantidade",
+        ).fillna(0)
+        pivot_unidades = pivot_unidades.reindex(
+            columns=origens_presentes, fill_value=0
+        )
+
+        if len(origens_presentes) == 2:
+            origem_a, origem_b = origens_presentes
+            diferencas = pivot_unidades[origem_b] - pivot_unidades[origem_a]
+            if criterio_ordenacao == "Maior Diferença Absoluta (Planilhas)":
+                ordem_unidades = diferencas.abs().sort_values(ascending=False).index.tolist()
+            else:
+                ordem_unidades = (
+                    pivot_unidades.sum(axis=1).sort_values(ascending=False).index.tolist()
+                )
+        else:
+            ordem_unidades = (
+                pivot_unidades.sum(axis=1).sort_values(ascending=False).index.tolist()
+            )
+
+        fig_unidade = px.bar(
+            contagem_unidades,
             x="Unidade de Internação",
+            y="Quantidade",
             color="Origem / Período",
             barmode="group",
             title=f"Comparativo ordenado por: {criterio_ordenacao}",
-            text_auto=True,
+            text="Quantidade",
             category_orders={"Unidade de Internação": ordem_unidades},
-            color_discrete_sequence=["#2980B9", "#E67E22"]
+            color_discrete_sequence=["#2980B9", "#E67E22"],
         )
-        fig_unidade.update_traces(textfont_size=10, textangle=0, textposition="outside", cliponaxis=False)
-
-        max_y_global = df_filtrado.groupby(["Unidade de Internação", "Origem / Período"]).size().max() if not df_filtrado.empty else 1000
-
-        if len(origens_presentes) == 2 and p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
-            for setor in ordem_unidades:
-                if setor in pivot_unidades.index:
-                    d_abs = int(pivot_unidades.loc[setor, "Diff_Abs"])
-                    d_pct = pivot_unidades.loc[setor, "Diff_Pct"]
-                    val_a = pivot_unidades.loc[setor, p_a]
-                    val_b = pivot_unidades.loc[setor, p_b]
-                    max_val = max(val_a, val_b)
-                    
-                    cor_anotacao = "#2980B9" if val_a >= val_b else "#D35400"
-                    sinal = "+" if d_abs > 0 else ""
-                    texto_diff = f"Δ: {sinal}{d_abs:,} ({sinal}{d_pct:.1f}%)".replace(",", ".")
-                    
-                    fig_unidade.add_annotation(
-                        x=setor,
-                        y=max_val + (max_y_global * 0.18),
-                        text=texto_diff,
-                        showarrow=False,
-                        font=dict(size=11, color=cor_anotacao, family="Arial Black"),
-                        align="center"
-                    )
-
-        fig_unidade.update_yaxes(range=[0, max_y_global * 1.35])
+        fig_unidade.update_traces(
+            textposition="outside",
+            cliponaxis=False,
+            texttemplate="%{text:,.0f}",
+        )
+        maior_valor = (
+            float(contagem_unidades["Quantidade"].max())
+            if not contagem_unidades.empty
+            else 1
+        )
+        fig_unidade.update_yaxes(range=[0, max(1, maior_valor * 1.25)])
         fig_unidade.update_layout(
             height=650,
             font=dict(size=12),
             xaxis=dict(tickangle=-35, title="Unidades de Internação"),
-            yaxis=dict(title="Quantidade"),
-            legend=dict(title=dict(text="<b>Planilha</b>"))
+            yaxis=dict(title="Quantidade de limpezas"),
+            legend=dict(title=dict(text="Planilha")),
         )
+
+        if len(origens_presentes) == 2:
+            for unidade in ordem_unidades:
+                valor_a = float(pivot_unidades.loc[unidade, origem_a])
+                valor_b = float(pivot_unidades.loc[unidade, origem_b])
+                diferenca = int(valor_b - valor_a)
+                maximo = max(valor_a, valor_b)
+                percentual = (
+                    (diferenca / valor_a * 100) if valor_a else None
+                )
+                percentual_texto = (
+                    f"{percentual:+.1f}%" if percentual is not None else "base zero"
+                )
+                sinal = "+" if diferenca > 0 else ""
+                texto = f"Δ {sinal}{diferenca} ({percentual_texto})"
+                fig_unidade.add_annotation(
+                    x=unidade,
+                    y=maximo + maior_valor * 0.08,
+                    text=texto,
+                    showarrow=False,
+                    font=dict(size=10, color="#333"),
+                )
+
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO
         st.markdown("---")
-        st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
-        
-        def extrair_hora_inteira(hora_str):
-            if not hora_str or ":" not in str(hora_str):
-                return None
-            try:
-                return int(str(hora_str).split(":")[0])
-            except Exception:
-                return None
 
-        df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
-        df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"], as_index=False).size().rename(columns={"size": "Quantidade"})
-        
-        horas_base = [h for h in range(24)]
-        
-        df_pivot = df_horas_comp.pivot(index="Hora_Num", columns="Origem / Período", values="Quantidade").fillna(0)
-        
-        col_azul = None
-        col_laranja = None
-        for orig in origens_presentes:
-            if "1" in str(orig) or "A" in str(orig):
-                col_azul = orig
-            else:
-                col_laranja = orig
-        if col_azul is None and len(origens_presentes) > 0:
-            col_azul = origens_presentes[0]
-        if col_laranja is None and len(origens_presentes) > 1:
-            col_laranja = origens_presentes[1]
-
-        fig_hora = go.Figure()
-
-        for orig in origens_presentes:
-            df_orig_hora = df_horas_comp[df_horas_comp["Origem / Período"] == orig]
-            
-            df_full = pd.DataFrame({"Hora_Num": horas_base})
-            df_full = pd.merge(df_full, df_orig_hora, on="Hora_Num", how="left").fillna({"Quantidade": 0, "Origem / Período": orig})
-            df_full = df_full.sort_values("Hora_Num")
-            df_full["Hora"] = df_full["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
-
-            is_azul = ("1" in str(orig)) or (orig == col_azul)
-            cor_linha = "#2980B9" if is_azul else "#E67E22"
-
-            posicoes_texto = []
-            quantidades = df_full["Quantidade"].tolist()
-
-            for idx, row in df_full.iterrows():
-                h = int(row["Hora_Num"])
-                val = row["Quantidade"]
-                
-                val_prox = quantidades[idx + 1] if idx + 1 < len(quantidades) else val
-                val_ant = quantidades[idx - 1] if idx - 1 >= 0 else val
-                
-                delta_prox = val_prox - val
-                delta_ant = val - val_ant
-                
-                is_subindo = (delta_prox > 1000) or (delta_ant < -1000 and delta_prox > 300)
-                is_descendo = (delta_prox < -1000) or (delta_ant > 1000 and delta_prox < -300)
-
-                if is_subindo:
-                    if is_azul:
-                        posicoes_texto.append("top left")
-                    else:
-                        posicoes_texto.append("bottom right")
-                elif is_descendo:
-                    if is_azul:
-                        posicoes_texto.append("top right")
-                    else:
-                        posicoes_texto.append("bottom left")
-                else:
-                    if len(origens_presentes) == 2 and col_azul and col_laranja:
-                        val_a = df_pivot.loc[h, col_azul] if h in df_pivot.index else val
-                        val_l = df_pivot.loc[h, col_laranja] if h in df_pivot.index else val
-                        
-                        if val_l > val_a:
-                            if is_azul:
-                                posicoes_texto.append("bottom center")
-                            else:
-                                posicoes_texto.append("top center")
-                        else:
-                            if is_azul:
-                                posicoes_texto.append("top center")
-                            else:
-                                posicoes_texto.append("bottom center")
-                    else:
-                        posicoes_texto.append("top center" if is_azul else "bottom center")
-
-            fig_hora.add_trace(go.Scatter(
-                x=df_full["Hora"],
-                y=df_full["Quantidade"],
-                name=orig,
-                mode="lines+markers+text",
-                text=df_full["Quantidade"],
-                textposition=posicoes_texto,
-                textfont=dict(size=10, family="Arial Black", color=cor_linha),
-                line=dict(width=3, color=cor_linha),
-                marker=dict(size=6, color=cor_linha)
-            ))
-
-        fig_hora.update_traces(cliponaxis=False)
-        fig_hora.update_layout(
-            height=650,
-            font=dict(size=13),
-            xaxis=dict(title="Hora do Dia"),
-            yaxis=dict(title="Número de Limpezas"),
-            legend=dict(title=dict(text="<b>Planilha</b>")),
-            hovermode="x unified"
+        # -------------------------------------------------------------
+        # Gráfico de horário (usa somente registros com hora reconhecida)
+        # -------------------------------------------------------------
+        st.subheader("Comparativo de Limpezas por Horário (00h às 23h)")
+        df_horarios = df_filtrado.copy()
+        df_horarios["Hora_Num"] = pd.to_numeric(
+            df_horarios["Hora"].astype(str).str.extract(r"^(\d{1,2})", expand=False),
+            errors="coerce",
         )
-        st.plotly_chart(fig_hora, use_container_width=True)
+        df_horarios = df_horarios[df_horarios["Hora_Num"].between(0, 23)]
 
-        st.markdown("---")
-        
-        # Tabela e Botão de Download
-        col_d1, col_d2 = st.columns([3, 1])
-        with col_d1:
-            st.subheader("Tabela Detalhada Consolidada")
-        with col_d2:
-            csv_bytes = df_filtrado.drop(columns=["Hora_Num"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-            st.download_button(
-                label="📥 Baixar CSV Combinado",
-                data=csv_bytes,
-                file_name="relatorio_comparativo_limpezas.csv",
-                mime="text/csv",
-                use_container_width=True
+        if df_horarios.empty:
+            st.info("Não há horários válidos nos registros que passaram pelos filtros.")
+        else:
+            contagem_horas = (
+                df_horarios.groupby(
+                    ["Hora_Num", "Origem / Período"]
+                )
+                .size()
+                .rename("Quantidade")
+                .reset_index()
             )
+            fig_hora = go.Figure()
 
-        st.dataframe(df_filtrado.drop(columns=["Hora_Num"], errors="ignore"), use_container_width=True, hide_index=True)
+            for origem in origens_presentes:
+                serie = (
+                    contagem_horas[contagem_horas["Origem / Período"] == origem]
+                    .set_index("Hora_Num")["Quantidade"]
+                    .reindex(range(24), fill_value=0)
+                )
+                fig_hora.add_trace(
+                    go.Scatter(
+                        x=[f"{h:02d}h" for h in range(24)],
+                        y=serie.values,
+                        name=origem,
+                        mode="lines+markers",
+                        line=dict(width=3),
+                        marker=dict(size=6),
+                    )
+                )
 
-else:
-    st.info("👆 Por favor, faça o upload de pelo menos uma planilha (Excel ou CSV) acima para iniciar as análises.")
+            fig_hora.update_layout(
+                height=550,
+                font=dict(size=13),
+                xaxis=dict(title="Hora do dia"),
+                yaxis=dict(title="Número de limpezas"),
+                legend=dict(title=dict(text="Planilha")),
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig_hora, use_container_width=True)
+
+    st.markdown("---")
+
+    # -----------------------------------------------------------------
+    # Tabela detalhada e download
+    # -----------------------------------------------------------------
+    st.subheader("Tabela Detalhada Consolidada")
+    csv_bytes = df_filtrado.to_csv(
+        index=False, encoding="utf-8-sig"
+    ).encode("utf-8-sig")
+    st.download_button(
+        label="Baixar CSV combinado",
+        data=csv_bytes,
+        file_name="relatorio_comparativo_limpezas.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+    st.dataframe(df_filtrado, use_container_width=True, hide_index=True)
