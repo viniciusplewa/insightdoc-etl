@@ -329,7 +329,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM ANÁLISE DE INCLINAÇÃO (ANTI-COLISÃO EM RAMPAS)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM LÓGICA DEFINITIVA ANTI-COLISÃO
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -346,6 +346,21 @@ if len(dfs_combinados) > 0:
         
         horas_base = [h for h in range(24)]
         
+        # Tabela pivot para consultar facilmente os valores de azul e laranja por hora
+        df_pivot = df_horas_comp.pivot(index="Hora_Num", columns="Origem / Período", values="Quantidade").fillna(0)
+        
+        col_azul = None
+        col_laranja = None
+        for orig in origens_presentes:
+            if "1" in str(orig) or "A" in str(orig):
+                col_azul = orig
+            else:
+                col_laranja = orig
+        if col_azul is None and len(origens_presentes) > 0:
+            col_azul = origens_presentes[0]
+        if col_laranja is None and len(origens_presentes) > 1:
+            col_laranja = origens_presentes[1]
+
         fig_hora = go.Figure()
 
         for orig in origens_presentes:
@@ -356,36 +371,59 @@ if len(dfs_combinados) > 0:
             df_full = df_full.sort_values("Hora_Num")
             df_full["Hora"] = df_full["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
 
-            if "Planilha 1" in str(orig):
-                cor_linha = "#2980B9"
-            else:
-                cor_linha = "#E67E22"
+            is_azul = ("1" in str(orig)) or (orig == col_azul)
+            cor_linha = "#2980B9" if is_azul else "#E67E22"
 
-            # Análise inteligente da inclinação da linha ponto a ponto
             posicoes_texto = []
             quantidades = df_full["Quantidade"].tolist()
-            
+
             for idx, row in df_full.iterrows():
-                h_idx = int(row["Hora_Num"])
-                val_atual = row["Quantidade"]
+                h = int(row["Hora_Num"])
+                val = row["Quantidade"]
                 
-                # Identifica o próximo valor para saber se a linha está a subir ou a descer
-                val_proximo = quantidades[idx + 1] if idx + 1 < len(quantidades) else val_atual
-                val_anterior = quantidades[idx - 1] if idx - 1 >= 0 else val_atual
+                # Tendência de subida ou descida acentuada
+                val_prox = quantidades[idx + 1] if idx + 1 < len(quantidades) else val
+                val_ant = quantidades[idx - 1] if idx - 1 >= 0 else val
                 
-                # Regra baseada na inclinação (tendência da rampa)
-                if val_proximo > val_atual:
-                    # Gráfico a subir: joga a etiqueta para a esquerda/topo para não cortar a rampa
-                    posicoes_texto.append("top left")
-                elif val_proximo < val_atual:
-                    # Gráfico a descer: joga a etiqueta para a direita/topo
-                    posicoes_texto.append("top right")
-                else:
-                    # Gráfico reto/estável: alterna limpo entre cima (Planilha 1) e baixo (Planilha 2)
-                    if "Planilha 1" in str(orig):
-                        posicoes_texto.append("top center")
+                delta_prox = val_prox - val
+                delta_ant = val - val_ant
+                
+                # Limiar para subida ou descida forte
+                is_subindo = (delta_prox > 1000) or (delta_ant < -1000 and delta_prox > 300)
+                is_descendo = (delta_prox < -1000) or (delta_ant > 1000 and delta_prox < -300)
+
+                if is_subindo:
+                    # Subida forte: separar horizontalmente/diagonal para evitar a rampa
+                    if is_azul:
+                        posicoes_texto.append("top left")
                     else:
-                        posicoes_texto.append("bottom center")
+                        posicoes_texto.append("bottom right")
+                elif is_descendo:
+                    # Descida forte: separar horizontalmente/diagonal oposta
+                    if is_azul:
+                        posicoes_texto.append("top right")
+                    else:
+                        posicoes_texto.append("bottom left")
+                else:
+                    # Gráfico reto/estável: se houver duas planilhas, o maior valor fica em cima e o menor embaixo
+                    if len(origens_presentes) == 2 and col_azul and col_laranja:
+                        val_a = df_pivot.loc[h, col_azul] if h in df_pivot.index else val
+                        val_l = df_pivot.loc[h, col_laranja] if h in df_pivot.index else val
+                        
+                        if val_l > val_a:
+                            # Laranja é maior -> Laranja em cima (top center), Azul em baixo (bottom center)
+                            if is_azul:
+                                posicoes_texto.append("bottom center")
+                            else:
+                                posicoes_texto.append("top center")
+                        else:
+                            # Azul é maior ou igual -> Azul em cima (top center), Laranja em baixo (bottom center)
+                            if is_azul:
+                                posicoes_texto.append("top center")
+                            else:
+                                posicoes_texto.append("bottom center")
+                    else:
+                        posicoes_texto.append("top center" if is_azul else "bottom center")
 
             fig_hora.add_trace(go.Scatter(
                 x=df_full["Hora"],
