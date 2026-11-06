@@ -329,7 +329,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM AFASTAMENTO DE TEXTO (y_shift)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM DESLOCAMENTO SEGURO
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -359,11 +359,9 @@ if len(dfs_combinados) > 0:
             if "Planilha 1" in str(orig):
                 cor_linha = "#2980B9"
                 posicao_texto = "top center"
-                shift_y = 12  # Empurra o texto azul 12px para cima da linha
             else:
                 cor_linha = "#E67E22"
                 posicao_texto = "bottom center"
-                shift_y = -12 # Puxa o texto laranja 12px para baixo da linha
 
             fig_hora.add_trace(go.Scatter(
                 x=df_full["Hora"],
@@ -374,8 +372,7 @@ if len(dfs_combinados) > 0:
                 textposition=posicao_texto,
                 textfont=dict(size=10, family="Arial Black", color=cor_linha),
                 line=dict(width=3, color=cor_linha),
-                marker=dict(size=6, color=cor_linha),
-                yshift=shift_y
+                marker=dict(size=6, color=cor_linha)
             ))
 
         fig_hora.update_traces(cliponaxis=False)
