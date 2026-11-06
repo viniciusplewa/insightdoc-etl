@@ -82,7 +82,7 @@ def identificar_turno_serie(horas_series):
         
     return turnos
 
-# Função de processamento otimizada
+# Função de processamento robusta e limpa
 def processar_relatorio_limpeza(uploaded_file, nome_origem):
     nome_arquivo = uploaded_file.name.lower()
     
@@ -101,15 +101,17 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
     
     df_raw.columns = [str(c).strip().upper() for c in df_raw.columns]
     
+    # Identificação inteligente de colunas
     col_sol = next((c for c in df_raw.columns if any(k in c for k in ["SOLICITA", "COD", "ID", "REGISTRO"])), df_raw.columns[0])
     col_leito = next((c for c in df_raw.columns if any(k in c for k in ["LEITO", "QUARTO", "LOCAL", "AMBIENTE"])), None)
     col_tipo = next((c for c in df_raw.columns if any(k in c for k in ["TIPO", "LIMPEZA"])), None)
+    col_func = next((c for c in df_raw.columns if any(k in c for k in ["FUNCIONARIO", "COLABORADOR", "RESPONSAVEL", "EXECUTANTE", "OPERADOR", "FUNCIONÁRIO"])), None)
 
     solicitacao = df_raw[col_sol].fillna("").astype(str).str.strip()
     
+    # Extração de Hora
     hora = pd.Series("", index=df_raw.index)
     candidatas_hora = [c for c in df_raw.columns if any(k in c for k in ["HORA", "DATA", "EMISSAO"])]
-    
     for col in candidatas_hora:
         amostra = df_raw[col].fillna("").astype(str).str.strip()
         if amostra.str.contains(r'\d{2}:\d{2}', na=False).any():
@@ -123,6 +125,7 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 hora = amostra.str.extract(r'(\d{2}:\d{2})', expand=False).fillna("")
                 break
 
+    # Extração de Leito
     leito = pd.Series("PA", index=df_raw.index)
     if col_leito and col_leito in df_raw.columns:
         leito = df_raw[col_leito].fillna("PA").astype(str).str.strip()
@@ -134,6 +137,7 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 leito = df_raw[col].fillna("PA").astype(str).str.strip()
                 break
 
+    # Extração de Tipo de Limpeza
     tipo_limpeza = pd.Series("TERMINAL DE LEITO", index=df_raw.index)
     if col_tipo and col_tipo in df_raw.columns:
         val_tipo = df_raw[col_tipo].fillna("").astype(str).str.upper()
@@ -146,7 +150,17 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
                 tipo_limpeza = val_tipo.apply(lambda x: "CONCORRENTE" if "CONCORRENTE" in x else "TERMINAL DE LEITO")
                 break
 
-    funcionario_protegido = pd.Series("🔒 [LGPD Ocultado]", index=df_raw.index)
+    # Extração exclusiva do Colaborador/Funcionário (Sem dados de pacientes)
+    colaborador = pd.Series("Não Informado", index=df_raw.index)
+    if col_func and col_func in df_raw.columns:
+        colaborador = df_raw[col_func].fillna("Não Informado").astype(str).str.strip()
+        colaborador = colaborador.replace("", "Não Informado")
+    else:
+        for col in df_raw.columns:
+            amostra_sup = str(col).upper()
+            if any(k in amostra_sup for k in ["FUNC", "COLAB", "RESP", "EXEC", "OPER"]):
+                colaborador = df_raw[col].fillna("Não Informado").astype(str).str.strip()
+                break
 
     df_final = pd.DataFrame({
         "Origem / Período": nome_origem,
@@ -155,11 +169,16 @@ def processar_relatorio_limpeza(uploaded_file, nome_origem):
         "Turno": identificar_turno_serie(hora),
         "Leito": leito,
         "Tipo de Limpeza": tipo_limpeza,
-        "Funcionário / Paciente": funcionario_protegido,
+        "Colaborador": colaborador,
         "Unidade de Internação": identificar_setor_serie(leito),
     })
 
-    df_final = df_final[df_final["Solicitação"] != ""].copy()
+    # Filtro rigoroso para eliminar linhas de cabeçalho duplicadas ou vazias
+    df_final = df_final[
+        (df_final["Solicitação"] != "") & 
+        (~df_final["Solicitação"].str.upper().str.contains("SOLICITA|COD|ID|REGISTRO", na=False))
+    ].copy()
+    
     return df_final
 
 # Main Title & Header
@@ -168,8 +187,7 @@ st.markdown("---")
 
 st.header("Análise Comparativa de Relatórios de Quartos")
 st.markdown(
-    "Faça o upload de **uma ou duas planilhas** para realizar análises isoladas ou uma **comparação lado a lado** "
-    "com total segurança (LGPD Ativada)."
+    "Faça o upload de **uma ou duas planilhas** para realizar análises isoladas ou uma **comparação lado a lado**."
 )
 
 col_up1, col_up2 = st.columns(2)
@@ -199,7 +217,6 @@ if len(dfs_combinados) > 0:
         st.warning("⚠️ Não foram encontrados registros estruturados nas planilhas enviadas.")
     else:
         st.success(f"Dados processados com sucesso! Total de registros combinados: {len(df_limpeza):,}".replace(",", "."))
-        st.info("🔒 **LGPD Ativada:** Nomes de pacientes e dados confidenciais foram totalmente ocultados.")
 
         # Filtros Globais
         col_f1, col_f2, col_f3 = st.columns(3)
@@ -305,7 +322,7 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 3. GRÁFICO DE BARRAS COM CORES DINÂMICAS NA DIFERENÇA (Azul ou Laranja)
+        # 3. GRÁFICO DE BARRAS COM CORES DINÂMICAS NA DIFERENÇA
         st.subheader("Volume por Unidade de Internação (Comparativo)")
         
         col_ord1, col_ord2 = st.columns([2, 4])
@@ -357,11 +374,7 @@ if len(dfs_combinados) > 0:
                     val_b = pivot_unidades.loc[setor, p_b]
                     max_val = max(val_a, val_b)
                     
-                    # Define a cor da anotação com base em qual planilha tem mais limpezas
-                    # Se val_a >= val_b, o azul domina -> Cor azul (#2980B9)
-                    # Se val_b > val_a, o laranja domina -> Cor laranja (#D35400)
                     cor_anotacao = "#2980B9" if val_a >= val_b else "#D35400"
-                    
                     sinal = "+" if d_abs > 0 else ""
                     texto_diff = f"Δ: {sinal}{d_abs:,} ({sinal}{d_pct:.1f}%)".replace(",", ".")
                     
@@ -384,7 +397,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM LÓGICA DEFINITIVA ANTI-COLISÃO
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -497,10 +510,10 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
         
-        # Tabela e Botão de Download
+        # Tabela e Botão de Download (Renomeada a coluna para Colaborador sem LGPD)
         col_d1, col_d2 = st.columns([3, 1])
         with col_d1:
-            st.subheader("Tabela Detalhada Consolidada (Segura)")
+            st.subheader("Tabela Detalhada Consolidada")
         with col_d2:
             csv_bytes = df_filtrado.drop(columns=["Hora_Num"], errors="ignore").to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
             st.download_button(
