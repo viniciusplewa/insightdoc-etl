@@ -329,7 +329,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM POSICIONAMENTO INTELIGENTE ANTICOLISÃO
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM AFASTAMENTO DE TEXTO (y_shift)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -346,9 +346,6 @@ if len(dfs_combinados) > 0:
         
         horas_base = [h for h in range(24)]
         
-        # Prepara dados consolidados hora a hora para comparar qual valor está acima em cada ponto
-        tabela_pivot = df_horas_comp.pivot(index="Hora_Num", columns="Origem / Período", values="Quantidade").fillna(0)
-
         fig_hora = go.Figure()
 
         for orig in origens_presentes:
@@ -359,32 +356,14 @@ if len(dfs_combinados) > 0:
             df_full = df_full.sort_values("Hora_Num")
             df_full["Hora"] = df_full["Hora_Num"].apply(lambda x: f"{int(x):02d}h")
 
-            # Cores fixas perfeitas
             if "Planilha 1" in str(orig):
                 cor_linha = "#2980B9"
+                posicao_texto = "top center"
+                shift_y = 12  # Empurra o texto azul 12px para cima da linha
             else:
                 cor_linha = "#E67E22"
-
-            # Posicionamento inteligente anti-colisão hora a hora
-            posicoes_texto = []
-            for _, row in df_full.iterrows():
-                h = int(row["Hora_Num"])
-                val = row["Quantidade"]
-                
-                if len(tabela_pivot.columns) == 2:
-                    col1, col2 = tabela_pivot.columns[0], tabela_pivot.columns[1]
-                    val1 = tabela_pivot.loc[h, col1] if h in tabela_pivot.index else 0
-                    val2 = tabela_pivot.loc[h, col2] if h in tabela_pivot.index else 0
-                    
-                    if val1 == val2:
-                        # Se forem iguais, Planilha 1 fica em cima e Planilha 2 em baixo
-                        posicoes_texto.append("top center" if "Planilha 1" in str(orig) else "bottom center")
-                    elif val >= max(val1, val2):
-                        posicoes_texto.append("top center")
-                    else:
-                        posicoes_texto.append("bottom center")
-                else:
-                    posicoes_texto.append("top center")
+                posicao_texto = "bottom center"
+                shift_y = -12 # Puxa o texto laranja 12px para baixo da linha
 
             fig_hora.add_trace(go.Scatter(
                 x=df_full["Hora"],
@@ -392,12 +371,14 @@ if len(dfs_combinados) > 0:
                 name=orig,
                 mode="lines+markers+text",
                 text=df_full["Quantidade"],
-                textposition=posicoes_texto,
+                textposition=posicao_texto,
                 textfont=dict(size=10, family="Arial Black", color=cor_linha),
                 line=dict(width=3, color=cor_linha),
-                marker=dict(size=6, color=cor_linha)
+                marker=dict(size=6, color=cor_linha),
+                yshift=shift_y
             ))
 
+        fig_hora.update_traces(cliponaxis=False)
         fig_hora.update_layout(
             height=650,
             font=dict(size=13),
