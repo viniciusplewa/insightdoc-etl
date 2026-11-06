@@ -328,7 +328,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Corrigido e isolado por planilha)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Limpo, com marcadores e tooltips perfeitos)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -342,7 +342,6 @@ if len(dfs_combinados) > 0:
 
         df_filtrado["Hora_Num"] = df_filtrado["Hora"].apply(extrair_hora_inteira)
         
-        # Agrupamento estrito por hora e origem para garantir valores reais independentes
         df_horas_comp = df_filtrado.groupby(["Hora_Num", "Origem / Período"], as_index=False).size().rename(columns={"size": "Quantidade"})
         
         horas_base = []
@@ -365,27 +364,18 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         
-        # Posicionamento inteligente alternado para evitar sobreposição e destacar os números
-        text_positions = []
-        for _, row in df_horas_final.iterrows():
-            if row["Origem / Período"] == "Planilha 2 (B)":
-                text_positions.append("bottom center")
-            else:
-                text_positions.append("top center")
-
+        # Removemos os textos estáticos sobrepostos e deixamos apenas as linhas com marcadores interativos ultra limpos
         fig_hora.update_traces(
-            mode="lines+markers+text",
-            text=df_horas_final["Quantidade"],
-            textposition=text_positions,
-            textfont=dict(size=10, family="Arial Black"),
+            mode="lines+markers",
             line=dict(width=3)
         )
         fig_hora.update_layout(
-            height=650,
+            height=600,
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
-            legend=dict(title=dict(text="<b>Planilha</b>"))
+            legend=dict(title=dict(text="<b>Planilha</b>")),
+            hovermode="x unified"
         )
         st.plotly_chart(fig_hora, use_container_width=True)
 
