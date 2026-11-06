@@ -305,7 +305,7 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 3. GRÁFICO DE BARRAS COM DIFERENÇA ABSOLUTA E PERCENTUAL ACIMA DOS SETORES
+        # 3. GRÁFICO DE BARRAS COM DIFERENÇA BEM ELEVADA ACIMA DOS SETORES
         st.subheader("Volume por Unidade de Internação (Comparativo)")
         
         col_ord1, col_ord2 = st.columns([2, 4])
@@ -315,7 +315,6 @@ if len(dfs_combinados) > 0:
                 ["Maior Diferença Absoluta (Planilhas)", "Maior Volume Geral"]
             )
 
-        # Se houver duas planilhas, preparamos a tabela comparativa e as anotações de diferença
         if len(origens_presentes) == 2:
             p_a, p_b = origens_presentes[0], origens_presentes[1]
             pivot_unidades = df_filtrado.pivot_table(index="Unidade de Internação", columns="Origem / Período", values="Solicitação", aggfunc="count").fillna(0)
@@ -347,8 +346,9 @@ if len(dfs_combinados) > 0:
         )
         fig_unidade.update_traces(textfont_size=10, textangle=0, textposition="outside", cliponaxis=False)
 
-        # Adiciona anotações de diferença (numérica e percentual) acima de cada par de barras
+        # Adiciona anotações de diferença bem acima dos números individuais das barras
         if len(origens_presentes) == 2 and p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
+            max_global = pivot_unidades[[p_a, p_b]].max().max() if not pivot_unidades.empty else 1000
             for setor in ordem_unidades:
                 if setor in pivot_unidades.index:
                     d_abs = int(pivot_unidades.loc[setor, "Diff_Abs"])
@@ -360,17 +360,20 @@ if len(dfs_combinados) > 0:
                     sinal = "+" if d_abs > 0 else ""
                     texto_diff = f"Δ: {sinal}{d_abs:,} ({sinal}{d_pct:.1f}%)".replace(",", ".")
                     
+                    # Posicionamento dinâmico seguro e elevado para evitar colisão com os números das barras
+                    offset_y = max_global * 0.12 if max_global > 0 else 500
+                    
                     fig_unidade.add_annotation(
                         x=setor,
-                        y=max_val + (max_val * 0.12) + 200, # Posiciona logo acima da barra mais alta
+                        y=max_val + offset_y,
                         text=texto_diff,
                         showarrow=False,
-                        font=dict(size=10, color="#2C3E50", family="Arial Black"),
+                        font=dict(size=11, color="#1B4F72", family="Arial Black"),
                         align="center"
                     )
 
         fig_unidade.update_layout(
-            height=600,
+            height=650,
             font=dict(size=12),
             xaxis=dict(tickangle=-35, title="Unidades de Internação"),
             yaxis=dict(title="Quantidade"),
