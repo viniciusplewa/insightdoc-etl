@@ -249,7 +249,7 @@ if len(dfs_combinados) > 0:
                 </div>
                 """.replace(",", "."), unsafe_allow_html=True)
 
-        # Se houver duas planilhas, exibe o cartão de diferença corrigido de forma segura
+        # Se houver duas planilhas, exibe o cartão de diferença com formatação segura
         if len(origens_presentes) == 2:
             p1, p2 = origens_presentes[0], origens_presentes[1]
             m1, m2 = valores_metricas[p1], valores_metricas[p2]
@@ -263,16 +263,24 @@ if len(dfs_combinados) > 0:
             diff_conc = m2["Concorrentes"] - m1["Concorrentes"]
             pct_conc = (diff_conc / m1["Concorrentes"] * 100) if m1["Concorrentes"] > 0 else 0
             
+            sinal_tot = "+" if diff_tot > 0 else ""
+            sinal_term = "+" if diff_term > 0 else ""
+            sinal_conc = "+" if diff_conc > 0 else ""
+            
+            sinal_pct_tot = "+" if pct_tot > 0 else ""
+            sinal_pct_term = "+" if pct_term > 0 else ""
+            sinal_pct_conc = "+" if pct_conc > 0 else ""
+
             st.markdown(f"""
             <div style="background-color: #f8f9fa; padding: 14px; border-radius: 10px; border: 1px solid #ddd; margin-top: 12px;">
                 <b style="color: #333;">📈 Diferença ({p2} vs {p1}):</b>
                 <div style="display: flex; justify-content: space-around; margin-top: 8px; font-size: 14px;">
-                    <div><b>Total:</b> {diff_tot:+,:,} ({pct_tot:+.2f}%)</div>
-                    <div><b>Terminais:</b> {diff_term:+,:,} ({pct_term:+.2f}%)</div>
-                    <div><b>Concorrentes:</b> {diff_conc:+,:,} ({pct_conc:+.2f}%)</div>
+                    <div><b>Total:</b> {sinal_tot}{diff_tot:,} ({sinal_pct_tot}{pct_tot:.2f}%)</div>
+                    <div><b>Terminais:</b> {sinal_term}{diff_term:,} ({sinal_pct_term}{pct_term:.2f}%)</div>
+                    <div><b>Concorrentes:</b> {sinal_conc}{diff_conc:,} ({sinal_pct_conc}{pct_conc:.2f}%)</div>
                 </div>
             </div>
-            """.replace(",", ".").replace("+.", "+").replace("-.", "-"), unsafe_allow_html=True)
+            """.replace(",", "."), unsafe_allow_html=True)
 
         st.markdown("---")
 
