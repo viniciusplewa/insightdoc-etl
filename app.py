@@ -329,7 +329,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM ANTICOLISÃO DINÂMICA PONTO A PONTO
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM ANÁLISE DE INCLINAÇÃO (ANTI-COLISÃO EM RAMPAS)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -346,9 +346,6 @@ if len(dfs_combinados) > 0:
         
         horas_base = [h for h in range(24)]
         
-        # Cria uma tabela pivot para comparar valores hora a hora entre as planilhas
-        tabela_pivot = df_horas_comp.pivot(index="Hora_Num", columns="Origem / Período", values="Quantidade").fillna(0)
-
         fig_hora = go.Figure()
 
         for orig in origens_presentes:
@@ -364,27 +361,31 @@ if len(dfs_combinados) > 0:
             else:
                 cor_linha = "#E67E22"
 
-            # Determinação de posição ponto a ponto com base em qual série está em cima
+            # Análise inteligente da inclinação da linha ponto a ponto
             posicoes_texto = []
-            for _, row in df_full.iterrows():
-                h = int(row["Hora_Num"])
-                val = row["Quantidade"]
+            quantidades = df_full["Quantidade"].tolist()
+            
+            for idx, row in df_full.iterrows():
+                h_idx = int(row["Hora_Num"])
+                val_atual = row["Quantidade"]
                 
-                if len(tabela_pivot.columns) == 2:
-                    col1, col2 = tabela_pivot.columns[0], tabela_pivot.columns[1]
-                    val1 = tabela_pivot.loc[h, col1] if h in tabela_pivot.index else 0
-                    val2 = tabela_pivot.loc[h, col2] if h in tabela_pivot.index else 0
-                    
-                    if val1 == val2:
-                        posicoes_texto.append("top center" if "Planilha 1" in str(orig) else "bottom center")
-                    elif val >= max(val1, val2):
-                        # A série que está mais acima recebe posição para cima
+                # Identifica o próximo valor para saber se a linha está a subir ou a descer
+                val_proximo = quantidades[idx + 1] if idx + 1 < len(quantidades) else val_atual
+                val_anterior = quantidades[idx - 1] if idx - 1 >= 0 else val_atual
+                
+                # Regra baseada na inclinação (tendência da rampa)
+                if val_proximo > val_atual:
+                    # Gráfico a subir: joga a etiqueta para a esquerda/topo para não cortar a rampa
+                    posicoes_texto.append("top left")
+                elif val_proximo < val_atual:
+                    # Gráfico a descer: joga a etiqueta para a direita/topo
+                    posicoes_texto.append("top right")
+                else:
+                    # Gráfico reto/estável: alterna limpo entre cima (Planilha 1) e baixo (Planilha 2)
+                    if "Planilha 1" in str(orig):
                         posicoes_texto.append("top center")
                     else:
-                        # A série que está mais abaixo recebe posição para baixo
                         posicoes_texto.append("bottom center")
-                else:
-                    posicoes_texto.append("top center")
 
             fig_hora.add_trace(go.Scatter(
                 x=df_full["Hora"],
