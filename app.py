@@ -328,7 +328,7 @@ if len(dfs_combinados) > 0:
         )
         st.plotly_chart(fig_unidade, use_container_width=True)
 
-        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO (Limpo, com marcadores e tooltips perfeitos)
+        # 4. GRÁFICO DE LINHA TEMPORAL COMPARATIVO COM TEXTOS DE CORES DIFERENCIADAS (Azul e Laranja)
         st.markdown("---")
         st.subheader("📈 Comparativo de Picos por Horário do Dia (00h às 23h)")
         
@@ -364,18 +364,30 @@ if len(dfs_combinados) > 0:
             color_discrete_sequence=["#2980B9", "#E67E22"]
         )
         
-        # Removemos os textos estáticos sobrepostos e deixamos apenas as linhas com marcadores interativos ultra limpos
+        # Atribuição de cores exatas para os textos destacarem cada linha (Azul para Planilha 1 e Laranja para Planilha 2)
+        text_colors = []
+        text_positions = []
+        for _, row in df_horas_final.iterrows():
+            if "Planilha 2" in str(row["Origem / Período"]):
+                text_colors.append("#D35400") # Laranja escuro destacado
+                text_positions.append("bottom center")
+            else:
+                text_colors.append("#1B4F72") # Azul escuro destacado
+                text_positions.append("top center")
+
         fig_hora.update_traces(
-            mode="lines+markers",
+            mode="lines+markers+text",
+            text=df_horas_final["Quantidade"],
+            textposition=text_positions,
+            textfont=dict(size=10, family="Arial Black", color=text_colors),
             line=dict(width=3)
         )
         fig_hora.update_layout(
-            height=600,
+            height=650,
             font=dict(size=13),
             xaxis=dict(title="Hora do Dia"),
             yaxis=dict(title="Número de Limpezas"),
-            legend=dict(title=dict(text="<b>Planilha</b>")),
-            hovermode="x unified"
+            legend=dict(title=dict(text="<b>Planilha</b>"))
         )
         st.plotly_chart(fig_hora, use_container_width=True)
 
