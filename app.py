@@ -775,7 +775,7 @@ else:
                         mode="lines+markers+text",
                         text=[formatar_numero(v) for v in serie.values],
                         textposition="top center",
-                        textfont=dict(size=10, color=cor),
+                        textfont=dict(size=16, color=cor, family="Arial Black"),
                         line=dict(width=3.5, color=cor),
                         marker=dict(size=7, color=cor),
                         cliponaxis=False,
