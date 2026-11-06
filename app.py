@@ -305,16 +305,34 @@ if len(dfs_combinados) > 0:
 
         st.markdown("---")
 
-        # 3. GRÁFICO DE BARRAS
+        # 3. GRÁFICO DE BARRAS COM FILTRO DE ORDENAÇÃO POR DIFERENÇA OU VOLUME
         st.subheader("Volume por Unidade de Internação (Comparativo)")
-        ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
+        
+        col_ord1, col_ord2 = st.columns([2, 4])
+        with col_ord1:
+            criterio_ordenacao = st.selectbox(
+                "Ordenar setores por:",
+                ["Maior Volume Geral", "Maior Diferença Absoluta (Planilhas)"]
+            )
+
+        # Lógica de cálculo da ordem dos setores com base no filtro selecionado
+        if criterio_ordenacao == "Maior Diferença Absoluta (Planilhas)" and len(origens_presentes) == 2:
+            p_a, p_b = origens_presentes[0], origens_presentes[1]
+            pivot_unidades = df_filtrado.pivot_table(index="Unidade de Internação", columns="Origem / Período", values="Solicitação", aggfunc="count").fillna(0)
+            if p_a in pivot_unidades.columns and p_b in pivot_unidades.columns:
+                pivot_unidades["Diferenca"] = (pivot_unidades[p_b] - pivot_unidades[p_a]).abs()
+                ordem_unidades = pivot_unidades.sort_values(by="Diferenca", ascending=False).index.tolist()
+            else:
+                ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
+        else:
+            ordem_unidades = df_filtrado.groupby("Unidade de Internação").size().sort_values(ascending=False).index.tolist()
 
         fig_unidade = px.histogram(
             df_filtrado,
             x="Unidade de Internação",
             color="Origem / Período",
             barmode="group",
-            title="Comparativo de Volume entre Planilhas",
+            title=f"Comparativo ordenado por: {criterio_ordenacao}",
             text_auto=True,
             category_orders={"Unidade de Internação": ordem_unidades},
             color_discrete_sequence=["#2980B9", "#E67E22"]
@@ -346,7 +364,6 @@ if len(dfs_combinados) > 0:
         
         horas_base = [h for h in range(24)]
         
-        # Tabela pivot para consultar facilmente os valores de azul e laranja por hora
         df_pivot = df_horas_comp.pivot(index="Hora_Num", columns="Origem / Período", values="Quantidade").fillna(0)
         
         col_azul = None
@@ -381,43 +398,36 @@ if len(dfs_combinados) > 0:
                 h = int(row["Hora_Num"])
                 val = row["Quantidade"]
                 
-                # Tendência de subida ou descida acentuada
                 val_prox = quantidades[idx + 1] if idx + 1 < len(quantidades) else val
                 val_ant = quantidades[idx - 1] if idx - 1 >= 0 else val
                 
                 delta_prox = val_prox - val
                 delta_ant = val - val_ant
                 
-                # Limiar para subida ou descida forte
                 is_subindo = (delta_prox > 1000) or (delta_ant < -1000 and delta_prox > 300)
                 is_descendo = (delta_prox < -1000) or (delta_ant > 1000 and delta_prox < -300)
 
                 if is_subindo:
-                    # Subida forte: separar horizontalmente/diagonal para evitar a rampa
                     if is_azul:
                         posicoes_texto.append("top left")
                     else:
                         posicoes_texto.append("bottom right")
                 elif is_descendo:
-                    # Descida forte: separar horizontalmente/diagonal oposta
                     if is_azul:
                         posicoes_texto.append("top right")
                     else:
                         posicoes_texto.append("bottom left")
                 else:
-                    # Gráfico reto/estável: se houver duas planilhas, o maior valor fica em cima e o menor embaixo
                     if len(origens_presentes) == 2 and col_azul and col_laranja:
                         val_a = df_pivot.loc[h, col_azul] if h in df_pivot.index else val
                         val_l = df_pivot.loc[h, col_laranja] if h in df_pivot.index else val
                         
                         if val_l > val_a:
-                            # Laranja é maior -> Laranja em cima (top center), Azul em baixo (bottom center)
                             if is_azul:
                                 posicoes_texto.append("bottom center")
                             else:
                                 posicoes_texto.append("top center")
                         else:
-                            # Azul é maior ou igual -> Azul em cima (top center), Laranja em baixo (bottom center)
                             if is_azul:
                                 posicoes_texto.append("top center")
                             else:
@@ -437,7 +447,7 @@ if len(dfs_combinados) > 0:
                 marker=dict(size=6, color=cor_linha)
             ))
 
-        fig_hora.update_traces(cliponaxis=False)
+        fig_hora.update_traces(cliponaxis5=False) if hasattr(fig_hora, 'update_traces') else None
         fig_hora.update_layout(
             height=650,
             font=dict(size=13),
